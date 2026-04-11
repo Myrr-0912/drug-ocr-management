@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 环境变量（含密钥，禁止提交）
+.env
+.env.local
+
+# 上传文件
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
