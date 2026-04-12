@@ -7,15 +7,19 @@ import os
 
 from app.config import settings
 from app.api.v1.router import api_router
+from app.tasks.scheduler import setup_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期事件"""
-    # 确保上传目录存在
     os.makedirs(settings.upload_dir, exist_ok=True)
+    # 启动定时任务调度器
+    scheduler = setup_scheduler()
+    scheduler.start()
     yield
-    # 清理资源（后续添加 APScheduler 关闭）
+    # 关闭调度器
+    scheduler.shutdown(wait=False)
 
 
 app = FastAPI(

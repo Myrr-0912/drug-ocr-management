@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAlertsStore } from '@/stores/alerts'
 import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const alertsStore = useAlertsStore()
+
+// 应用启动时静默加载未读数
+onMounted(() => alertsStore.loadStats())
 
 const roleLabel: Record<string, string> = {
   admin: '管理员',
@@ -29,6 +35,20 @@ async function handleLogout() {
       <!-- 预留面包屑位置 -->
     </div>
     <div class="header-right">
+      <!-- 预警徽标 -->
+      <el-badge
+        :value="alertsStore.unreadCount"
+        :hidden="alertsStore.unreadCount === 0"
+        class="alert-badge"
+      >
+        <el-button
+          circle
+          size="small"
+          :icon="'Bell'"
+          class="bell-btn"
+          @click="router.push('/alerts')"
+        />
+      </el-badge>
       <el-dropdown @command="handleLogout">
         <div class="user-info">
           <el-avatar :size="32" class="user-avatar">
@@ -108,5 +128,20 @@ async function handleLogout() {
 .dropdown-icon {
   color: #9ca3af;
   font-size: 12px;
+}
+
+.alert-badge {
+  margin-right: 8px;
+}
+
+.bell-btn {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
 }
 </style>

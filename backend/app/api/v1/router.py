@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, drugs, ocr, batches, inventory
+from app.api.v1 import auth, drugs, ocr, batches, inventory, alerts
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -13,3 +13,5 @@ api_router.include_router(ocr.router)
 api_router.include_router(batches.router)
 # 库存管理模块
 api_router.include_router(inventory.router)
+# 预警管理模块
+api_router.include_router(alerts.router)
