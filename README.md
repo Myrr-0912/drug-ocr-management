@@ -35,108 +35,104 @@
 
 ---
 
-## 👋 新用户快速上手
+## 🚀 快速开始
 
-### 第一步：准备环境
+### 环境要求
 
-安装并启动以下服务：
+| 服务 | 版本 | 用途 |
+|------|------|------|
+| Python | 3.12+ | 运行后端 |
+| Node.js | 18+ | 运行前端 |
+| MySQL | 8.0 | 主数据库 |
+| Redis | 6+ | Token 管理 + 登录限流 |
 
-| 服务 | 用途 | 最低版本 |
-|------|------|---------|
-| Python | 运行后端 | 3.12+ |
-| Node.js | 运行前端 | 18+ |
-| MySQL | 主数据库 | 8.0 |
-| Redis | Token 管理 + 登录限流 | 6+ |
-
-在 MySQL 中创建一个空数据库：
+先在 MySQL 中建库：
 
 ```sql
 CREATE DATABASE drug_ocr_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 第二步：配置并启动后端
+### 启动后端
 
 ```bash
 cd backend
-
-# 安装依赖
 pip install -r requirements.txt
-
-# 复制环境变量模板
-cp .env.example .env
-```
-
-编辑 `.env`，填写以下必填项：
-
-```env
-DB_PASSWORD=你的MySQL密码
-JWT_SECRET_KEY=（用命令生成：python -c "import secrets; print(secrets.token_urlsafe(48))"）
-ALIYUN_OCR_ACCESS_KEY_ID=你的阿里云AccessKey ID
-ALIYUN_OCR_ACCESS_KEY_SECRET=你的阿里云AccessKey Secret
-```
-
-```bash
-# 初始化数据库表结构
-alembic upgrade head
-
-# 启动后端服务
+cp .env.example .env        # 编辑 .env，填写必填项（见下方环境变量说明）
+alembic upgrade head        # 初始化数据库表结构
 uvicorn app.main:app --reload
+# API 文档：http://localhost:8000/docs
 ```
 
-首次启动会自动创建管理员账号，终端日志中可看到确认信息。
-
-### 第三步：启动前端
+### 启动前端
 
 ```bash
 cd frontend
 npm install
 npm run dev
+# 访问 http://localhost:5173
 ```
 
-浏览器访问 `http://localhost:5173`
+### 环境变量说明
 
-### 第四步：登录系统
+| 变量 | 说明 | 必填 |
+|------|------|------|
+| `DB_PASSWORD` | MySQL 密码 | ✅ |
+| `JWT_SECRET_KEY` | JWT 签名密钥（≥32位，可用 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成） | ✅ |
+| `ALIYUN_OCR_ACCESS_KEY_ID` | 阿里云 RAM AccessKey ID | ✅ |
+| `ALIYUN_OCR_ACCESS_KEY_SECRET` | 阿里云 RAM AccessKey Secret | ✅ |
+| `REDIS_HOST` | Redis 地址，默认 `localhost` | — |
+| `SMTP_USER` / `SMTP_PASSWORD` | 阿里云 SMTP 账号（忘记密码功能） | — |
+| `INITIAL_ADMIN_PASSWORD` | 首次启动创建的 admin 密码，默认 `Admin@2026!` | — |
+| `EXPIRY_WARNING_DAYS` | 临期预警提前天数，默认 `30` | — |
+| `LOW_STOCK_THRESHOLD` | 低库存预警阈值（件），默认 `10` | — |
 
-使用自动创建的管理员账号登录：
+---
 
-| 字段 | 值 |
-|------|-----|
-| 用户名 | `admin` |
-| 密码 | `Admin@2026!`（即 `.env` 中 `INITIAL_ADMIN_PASSWORD` 的值） |
+## 👋 使用指南
 
-### 第五步：按角色使用功能
+首次启动后端时会自动创建管理员账号，使用以下信息登录：
 
-系统共三种角色，功能权限如下：
+- **用户名**：`admin`
+- **密码**：`.env` 中 `INITIAL_ADMIN_PASSWORD` 的值（默认 `Admin@2026!`）
 
-**管理员（Admin）** — 拥有全部权限
-- 在「用户管理」中为同事创建药师/普通用户账号，并分配角色
-- 查看「登录日志」审计用户操作记录
-- 手动触发预警扫描
+### 角色与权限
 
-**药师（Pharmacist）** — 核心操作角色
-1. 进入「**OCR 识别**」，上传药品包装照片
-2. 系统自动识别文字，提取药品名称、批号、有效期等字段
-3. 核对识别结果后点击「**确认入库**」，药品档案与批次自动创建
-4. 在「库存管理 → 入库」中补录数量信息
+| 角色 | 可访问页面 |
+|------|-----------|
+| 所有登录用户 | 仪表盘、药品档案、批次管理、库存流水、预警中心、个人中心 |
+| 药师及以上 | OCR 识别上传、入库操作 |
+| 仅管理员 | 用户管理（创建/封禁/重置密码）、登录审计日志 |
 
-**普通用户** — 查看只读数据
-- 浏览药品档案、批次状态、库存流水
-- 在「预警中心」查看临期/过期/低库存预警
+### 典型操作流程
 
-### 第六步：日常使用流程
-
+**新药入库（药师）**
 ```
-新药入库
-  └─ 药师 → OCR 识别上传图片 → 确认入库 → 库存管理录入数量
+OCR 识别 → 上传药品包装图片
+        → 系统自动提取药品名称 / 批号 / 有效期等字段
+        → 核对后点击「确认入库」（自动创建药品档案与批次）
+        → 库存管理 → 入库，录入实际数量
+```
 
-查看库存状态
-  └─ 药品列表 → 点击药品 → 查看所有批次及库存
+**日常库存管理**
+```
+药品列表 → 进入药品详情 → 查看各批次状态与库存数量
+库存管理 → 出库 / 盘点调整 → 生成流水记录
+```
 
-预警处理
-  └─ 预警中心 → 查看临期/低库存预警 → 处理后标记已解决
+**预警处理**
+```
+预警中心 → 查看临期 / 过期 / 低库存预警
+        → 处理完毕后标记「已解决」
+```
 
-用户密码忘记
-  └─ 登录页「忘记密码」→ 填写邮箱 → 收取邮件 → 重置密码
+**忘记密码**
+```
+登录页「忘记密码」→ 填写注册邮箱 → 收取重置邮件 → 设置新密码
+```
+
+**管理员创建新用户**
+```
+用户管理 → 新建用户 → 分配角色（药师 / 普通用户）→ 告知初始密码
 ```
 
 ---
@@ -158,116 +154,63 @@ uvicorn app.main:app
 ### 2. 认证流程
 
 ```
-用户登录 POST /api/v1/auth/login
-        │
-        ├─ 校验密码（bcrypt）
-        ├─ 检查账号是否被封禁 / 是否触发登录限流（Redis 计数）
-        ├─ 签发 Access Token（60 分钟有效）
-        └─ 签发 Refresh Token（7 天有效，存入 Redis 白名单）
+登录 POST /api/v1/auth/login
+        ├─ 校验密码（bcrypt）+ 检查封禁状态 + 登录限流（Redis 计数）
+        ├─ 签发 Access Token（60 分钟）
+        └─ 签发 Refresh Token（7 天，存入 Redis 白名单）
 
 后续请求：Header 携带 Bearer <AccessToken>
-        │
-        └─ JWT 解码 → 校验 Redis 黑名单（是否已登出）→ 注入 current_user
+        └─ JWT 解码 → 校验 Redis 黑名单 → 注入 current_user
 
-Access Token 过期时：POST /api/v1/auth/refresh
-        │
-        ├─ 验证 Refresh Token 在 Redis 白名单中
+Token 续期 POST /api/v1/auth/refresh
+        ├─ 验证 Refresh Token 在白名单中
         ├─ 签发新 Access Token + 新 Refresh Token（旋转刷新）
         └─ 旧 Refresh Token 立即失效（防重放）
 
-登出：POST /api/v1/auth/logout
-        │
-        ├─ Access Token 加入 Redis 黑名单（剩余 TTL 内失效）
-        └─ Refresh Token 从 Redis 白名单中删除
+登出 POST /api/v1/auth/logout
+        ├─ Access Token 加入 Redis 黑名单
+        └─ Refresh Token 从白名单删除
 
-忘记密码：POST /api/v1/auth/forgot-password
-        │
+忘记密码 POST /api/v1/auth/forgot-password
         ├─ 生成重置 Token 存入 Redis（15 分钟有效）
-        └─ 通过阿里云 SMTP 发送含重置链接的邮件
-                │
-                └─ 用户点击链接 → POST /api/v1/auth/reset-password → 更新密码
+        └─ 阿里云 SMTP 发送含重置链接的邮件
+                └─ 用户点击 → POST /api/v1/auth/reset-password → 更新密码
 ```
 
 ### 3. OCR 识别入库流程
 
 ```
-药师上传图片 POST /api/v1/ocr/upload
-        │
+上传 POST /api/v1/ocr/upload
         ├─ 校验文件类型（JPG/PNG/BMP/WebP）及大小（≤10MB）
         ├─ 保存图片到 uploads/ocr/<uuid>.jpg
-        ├─ 创建 OcrRecord（status: pending）写入数据库
-        │
-        ├─ 调用阿里云 OCR（RecognizeGeneral）
-        │       │
-        │       ├─ SDK 同步调用在线程池中执行（不阻塞事件循环）
-        │       └─ 返回 raw_text（识别文本）+ confidence（置信度）
-        │
-        ├─ 正则解析文本 → 提取结构化字段
-        │       药品名称 / 批准文号 / 规格 / 生产企业 / 批号 / 生产日期 / 有效期
-        │
+        ├─ 创建 OcrRecord（status: pending）
+        ├─ 调用阿里云 OCR（线程池中执行，不阻塞事件循环）
+        │       └─ 返回 raw_text + confidence
+        ├─ 正则解析：药品名称 / 批准文号 / 规格 / 生产企业 / 批号 / 有效期
         └─ 更新 OcrRecord（status: success，存储 extracted_data）
 
-药师核对后确认 POST /api/v1/ocr/{id}/confirm
-        │
-        ├─ 按药品名+批准文号查找已有药品，不存在则创建 Drug 记录
-        ├─ 根据有效期自动计算批次状态（normal / near_expiry / expired）
+确认入库 POST /api/v1/ocr/{id}/confirm
+        ├─ 按药品名+批准文号查重，不存在则创建 Drug 记录
+        ├─ 根据有效期计算批次状态（normal / near_expiry / expired）
         ├─ 创建 DrugBatch 记录，关联 source_ocr_id
         └─ OcrRecord 状态更新为 confirmed
 ```
 
-### 4. 库存管理流程
+### 4. 库存与预警流程
 
 ```
-入库 POST /api/v1/inventory/stock-in
-出库 POST /api/v1/inventory/stock-out
-盘点 POST /api/v1/inventory/adjust
-        │
-        ├─ 操作对应 DrugBatch.quantity（数量变更）
-        └─ 写入 InventoryLog 流水记录（类型 / 数量 / 操作人 / 时间）
+入库/出库/盘点
+        ├─ 变更 DrugBatch.quantity
+        └─ 写入 InventoryLog 流水（类型 / 数量 / 操作人 / 时间）
+
+预警扫描（每天 00:05 自动 或 管理员手动触发）
+        ├─ expiry_date < today       → 已过期预警
+        ├─ expiry_date ≤ today+30天  → 临期预警
+        ├─ quantity ≤ 10             → 库存不足预警
+        └─ 同批次同类型去重写入 Alert 表
 ```
 
-### 5. 预警系统流程
-
-```
-自动触发：APScheduler 每天 00:05
-手动触发：POST /api/v1/alerts/scan（管理员）
-        │
-        ├─ 扫描所有批次：
-        │       ├─ expiry_date < today          → 生成"已过期"预警
-        │       ├─ expiry_date ≤ today+30天     → 生成"临期"预警
-        │       └─ quantity ≤ LOW_STOCK(10)     → 生成"库存不足"预警
-        │
-        └─ 去重写入 Alert 表（同批次同类型不重复创建）
-
-前端预警中心：
-        ├─ 查看预警列表（按类型/状态筛选）
-        ├─ 批量标记已读 PATCH /api/v1/alerts/read
-        └─ 标记已解决 PATCH /api/v1/alerts/{id}/resolve
-```
-
-### 6. 前端路由与权限控制
-
-```
-未登录用户：只能访问 /login  /register  /forgot-password  /reset-password
-
-登录后（所有角色）：
-        /dashboard          仪表盘（ECharts 概览图表）
-        /drugs              药品档案列表 / 详情
-        /batches            批次管理
-        /inventory          库存流水
-        /alerts             预警中心
-        /profile            个人中心（修改密码/信息）
-
-仅药师及以上：
-        /ocr/upload         OCR 拍照识别上传
-        /inventory/stock-in 入库操作
-
-仅管理员：
-        /admin/users        用户管理（创建/封禁/重置密码）
-        /admin/login-logs   登录审计日志
-```
-
-### 7. API 端点总览
+### 5. API 端点总览
 
 | 模块 | 前缀 | 主要端点 |
 |------|------|---------|
@@ -282,70 +225,11 @@ Access Token 过期时：POST /api/v1/auth/refresh
 
 ---
 
-## 🚀 快速开始
-
-### 环境要求
-
-- Python 3.12+
-- Node.js 18+
-- MySQL 8.0
-- Redis 6+
-
-### 后端
-
-```bash
-cd backend
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env，至少填写：
-#   DB_PASSWORD          — MySQL 密码
-#   JWT_SECRET_KEY       — 随机强密钥（≥32位）
-#   ALIYUN_OCR_ACCESS_KEY_ID / ALIYUN_OCR_ACCESS_KEY_SECRET — 阿里云 AccessKey
-
-# 执行数据库迁移
-alembic upgrade head
-
-# 启动服务（首次启动自动创建 admin 账号）
-uvicorn app.main:app --reload
-# API 文档：http://localhost:8000/docs
-```
-
-### 前端
-
-```bash
-cd frontend
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-# 访问 http://localhost:5173
-```
-
-### 环境变量说明
-
-| 变量 | 说明 | 必填 |
-|------|------|------|
-| `DB_PASSWORD` | MySQL 密码 | ✅ |
-| `JWT_SECRET_KEY` | JWT 签名密钥（≥32位随机字符串） | ✅ |
-| `ALIYUN_OCR_ACCESS_KEY_ID` | 阿里云 RAM AccessKey ID | ✅ |
-| `ALIYUN_OCR_ACCESS_KEY_SECRET` | 阿里云 RAM AccessKey Secret | ✅ |
-| `REDIS_HOST` | Redis 地址，默认 `localhost` | — |
-| `SMTP_USER` / `SMTP_PASSWORD` | 阿里云 SMTP 账号（忘记密码功能） | — |
-| `INITIAL_ADMIN_PASSWORD` | 首次启动创建的 admin 密码，默认 `Admin@2026!` | — |
-| `EXPIRY_WARNING_DAYS` | 临期预警提前天数，默认 `30` | — |
-| `LOW_STOCK_THRESHOLD` | 低库存预警阈值（件），默认 `10` | — |
-
 ## 📁 项目结构
 
 ```
 .
-├── backend/                 # FastAPI 后端
+├── backend/
 │   ├── app/
 │   │   ├── api/v1/         # 路由层（auth/drugs/ocr/inventory/alerts/stats/admin）
 │   │   ├── models/         # SQLAlchemy ORM 模型
@@ -355,11 +239,11 @@ npm run dev
 │   │   ├── core/           # 认证、异常、Redis、邮件工具
 │   │   └── tasks/          # APScheduler 定时预警任务
 │   └── alembic/            # 数据库迁移脚本
-└── frontend/               # Vue 3 前端
+└── frontend/
     └── src/
-        ├── views/          # 页面组件（登录/仪表盘/药品/OCR/预警/用户管理）
+        ├── views/          # 页面组件
         ├── components/     # 通用组件
-        ├── stores/         # Pinia 状态（auth/drug/alert/inventory/batch/ocr）
+        ├── stores/         # Pinia 状态管理
         └── api/            # Axios 封装
 ```
 
