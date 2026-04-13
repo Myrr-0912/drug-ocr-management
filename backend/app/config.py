@@ -43,9 +43,9 @@ class Settings(BaseSettings):
     login_max_failures: int = 5
     login_lockout_minutes: int = 15
 
-    # 百度 OCR API 配置
-    baidu_ocr_api_key: str = ""
-    baidu_ocr_secret_key: str = ""
+    # 阿里云 OCR API 配置
+    aliyun_ocr_access_key_id: str = ""
+    aliyun_ocr_access_key_secret: str = ""
 
     # 文件上传配置
     upload_dir: str = "uploads"
