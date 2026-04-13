@@ -45,6 +45,19 @@
 | Node.js | 18+ | 运行前端 |
 | MySQL | 8.0 | 主数据库 |
 | Redis | 6+ | Token 管理 + 登录限流 |
+| Docker | 20+ | 运行 Redis 容器（推荐） |
+
+### 启动 Redis
+
+推荐使用 Docker 运行 Redis（需确保 Docker Desktop 已启动）：
+
+```bash
+docker run -d --name redis -p 6379:6379 --restart always redis:7-alpine
+```
+
+> `--restart always` 使 Redis 随 Docker Desktop 自动启动，后续无需手动操作。
+> 
+> 首次运行验证：`docker exec redis redis-cli ping`，返回 `PONG` 即正常。
 
 先在 MySQL 中建库：
 
