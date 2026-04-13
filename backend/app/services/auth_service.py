@@ -5,12 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedError, ConflictError, BusinessError
 from app.core.security import (
-    hash_password, verify_password, create_access_token, decode_access_token
+    hash_password, verify_password,
+    create_access_token, decode_access_token,
+    create_refresh_token, decode_refresh_token,
 )
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, LoginRequest, TokenResponse, UserResponse
 from app.services import login_throttle, audit_service
 from app.services.token_blacklist import blacklist_token
+from app.services import refresh_token_service, password_reset_service, email_service
 
 
 async def register(db: AsyncSession, data: UserCreate) -> User:
@@ -76,9 +79,13 @@ async def login(db: AsyncSession, data: LoginRequest, request: Request) -> Token
         db, request=request, username=data.username, success=True, user=user
     )
 
-    token = create_access_token(subject=user.id, role=user.role.value)
+    access_token = create_access_token(subject=user.id, role=user.role.value)
+    refresh_token_str, rt_jti = create_refresh_token(user.id)
+    await refresh_token_service.store_refresh_token(rt_jti, user.id)
+
     return TokenResponse(
-        access_token=token,
+        access_token=access_token,
+        refresh_token=refresh_token_str,
         user=UserResponse.model_validate(user),
     )
 
@@ -106,6 +113,86 @@ async def change_password(
         raise BusinessError("旧密码错误")
     user.password_hash = hash_password(new_password)
     await db.flush()
+
+
+async def refresh(db: AsyncSession, old_refresh_token: str) -> TokenResponse:
+    """使用 Refresh Token 换取新的 Access Token + Refresh Token（旋转刷新）
+
+    安全设计：
+    - 验证 JWT 签名与有效期
+    - 检查 Redis 中 jti 是否存在（防重放）
+    - 删除旧 jti + 写入新 jti（单次使用）
+    """
+    from jose import JWTError
+    try:
+        payload = decode_refresh_token(old_refresh_token)
+    except JWTError:
+        raise UnauthorizedError("Refresh Token 无效或已过期，请重新登录")
+
+    jti: str = payload.get("jti", "")
+    user_id = await refresh_token_service.get_user_id_by_jti(jti)
+    if not user_id:
+        raise UnauthorizedError("Refresh Token 已注销或已过期，请重新登录")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user: User | None = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise UnauthorizedError("账号不存在或已被禁用")
+
+    # 旋转：删旧 jti，生成新 token 对
+    await refresh_token_service.revoke_refresh_token(jti)
+    new_access = create_access_token(subject=user.id, role=user.role.value)
+    new_refresh_str, new_rt_jti = create_refresh_token(user.id)
+    await refresh_token_service.store_refresh_token(new_rt_jti, user.id)
+
+    return TokenResponse(
+        access_token=new_access,
+        refresh_token=new_refresh_str,
+        user=UserResponse.model_validate(user),
+    )
+
+
+async def logout_with_refresh(access_token: str, refresh_token_str: str | None) -> None:
+    """注销：黑名单 access token + 撤销 refresh token"""
+    await logout(access_token)
+    if refresh_token_str:
+        try:
+            payload = decode_refresh_token(refresh_token_str)
+            jti = payload.get("jti", "")
+            if jti:
+                await refresh_token_service.revoke_refresh_token(jti)
+        except Exception:
+            pass  # refresh token 已过期，忽略
+
+
+async def forgot_password(db: AsyncSession, email: str) -> None:
+    """忘记密码：验证邮箱存在 → 生成重置 token → 发送邮件
+
+    安全：无论邮箱是否存在均返回成功（防枚举）
+    """
+    result = await db.execute(select(User).where(User.email == email))
+    user: User | None = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        return  # 静默返回，不暴露账号是否存在
+
+    token = await password_reset_service.create_reset_token(user.id)
+    await email_service.send_reset_password_email(email, user.username, token)
+
+
+async def reset_password(db: AsyncSession, token: str, new_password: str) -> None:
+    """重置密码：校验 token → 改密码 → 作废 token"""
+    user_id = await password_reset_service.get_user_id_by_token(token)
+    if not user_id:
+        raise BusinessError("重置链接无效或已过期，请重新申请")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user: User | None = result.scalar_one_or_none()
+    if not user:
+        raise BusinessError("用户不存在")
+
+    user.password_hash = hash_password(new_password)
+    await db.flush()
+    await password_reset_service.revoke_reset_token(token)
 
 
 def _get_ip(request: Request) -> str | None:

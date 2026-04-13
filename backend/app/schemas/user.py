@@ -50,6 +50,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
 
@@ -57,6 +58,29 @@ class TokenResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     """修改密码请求"""
     old_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_min_length(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("新密码长度不能少于 6 位")
+        return v
+
+
+class RefreshTokenRequest(BaseModel):
+    """续期请求"""
+    refresh_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """忘记密码：输入邮箱"""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """重置密码：输入 token + 新密码"""
+    token: str
     new_password: str
 
     @field_validator("new_password")

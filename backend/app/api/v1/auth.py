@@ -10,6 +10,7 @@ from app.schemas.common import ok
 from app.schemas.user import (
     LoginRequest, TokenResponse, UserCreate, UserResponse,
     UserUpdate, ChangePasswordRequest,
+    RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest,
 )
 from app.services import auth_service
 
@@ -36,13 +37,42 @@ async def login(
     return ok(token_resp, "登录成功")
 
 
-@router.post("/logout", summary="用户登出（注销 Token）")
+@router.post("/logout", summary="用户登出（同时注销 Access + Refresh Token）")
 async def logout(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
     current_user: Annotated[User, RequireLogin],
+    data: RefreshTokenRequest | None = None,
 ):
-    await auth_service.logout(credentials.credentials)
+    refresh_token = data.refresh_token if data else None
+    await auth_service.logout_with_refresh(credentials.credentials, refresh_token)
     return ok(None, "已成功登出")
+
+
+@router.post("/refresh", summary="使用 Refresh Token 续期（旋转刷新）")
+async def refresh_token(
+    data: RefreshTokenRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    token_resp = await auth_service.refresh(db, data.refresh_token)
+    return ok(token_resp, "续期成功")
+
+
+@router.post("/forgot-password", summary="忘记密码（发送重置邮件）")
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await auth_service.forgot_password(db, data.email)
+    return ok(None, "如果该邮箱已注册，重置邮件将在几分钟内发送")
+
+
+@router.post("/reset-password", summary="重置密码（凭 token 设置新密码）")
+async def reset_password(
+    data: ResetPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await auth_service.reset_password(db, data.token, data.new_password)
+    return ok(None, "密码重置成功，请使用新密码登录")
 
 
 @router.get("/me", summary="获取当前用户信息")

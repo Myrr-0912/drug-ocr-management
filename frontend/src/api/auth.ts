@@ -19,9 +19,27 @@ export function updateMe(data: { real_name?: string; phone?: string; email?: str
 }
 
 export function logout() {
-  return request.post<ApiResponse<null>>('/auth/logout')
+  const refreshToken = localStorage.getItem('refresh_token')
+  return request.post<ApiResponse<null>>(
+    '/auth/logout',
+    refreshToken ? { refresh_token: refreshToken } : undefined,
+  )
 }
 
 export function changePassword(data: { old_password: string; new_password: string }) {
   return request.post<ApiResponse<null>>('/auth/change-password', data)
+}
+
+export function refreshToken(refreshTokenStr: string) {
+  return request.post<ApiResponse<TokenResponse>>('/auth/refresh', {
+    refresh_token: refreshTokenStr,
+  })
+}
+
+export function forgotPassword(email: string) {
+  return request.post<ApiResponse<null>>('/auth/forgot-password', { email })
+}
+
+export function resetPassword(token: string, new_password: string) {
+  return request.post<ApiResponse<null>>('/auth/reset-password', { token, new_password })
 }

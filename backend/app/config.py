@@ -14,7 +14,19 @@ class Settings(BaseSettings):
     # JWT 配置
     jwt_secret_key: str = "change_me_in_production"
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 1440
+    jwt_access_token_expire_minutes: int = 60       # Access Token 有效期（分钟）
+    jwt_refresh_token_expire_days: int = 7          # Refresh Token 有效期（天）
+
+    # SMTP 邮件配置（阿里云）
+    smtp_host: str = "smtpdm.aliyun.com"
+    smtp_port: int = 465
+    smtp_user: str = ""          # 发件人邮箱地址（阿里云 SMTP 账号）
+    smtp_password: str = ""      # SMTP 授权码
+    smtp_from: str = ""          # 发件人显示名+地址，如 "药品管理系统 <noreply@example.com>"
+    smtp_use_ssl: bool = True    # 阿里云 465 端口需 SSL
+
+    # 前端域名（用于邮件中的重置密码链接）
+    frontend_url: str = "http://localhost:5173"
 
     # Redis 配置（token 黑名单 + 登录限流）
     redis_host: str = "localhost"

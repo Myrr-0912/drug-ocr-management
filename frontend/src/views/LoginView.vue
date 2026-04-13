@@ -76,11 +76,12 @@ async function handleLogin() {
         </el-button>
       </el-form>
 
-      <!-- 注册入口 -->
-      <p class="register-hint">
-        还没有账号？
-        <router-link to="/register" class="register-link">立即注册</router-link>
-      </p>
+      <!-- 辅助链接区 -->
+      <div class="aux-links">
+        <router-link to="/forgot-password" class="aux-link">忘记密码？</router-link>
+        <span class="divider">·</span>
+        <router-link to="/register" class="aux-link">立即注册</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -140,13 +141,18 @@ async function handleLogin() {
   letter-spacing: 0.5px;
 }
 
-.register-hint {
+.aux-links {
   text-align: center;
   margin-top: 20px;
   font-size: 13px;
   color: #6b7280;
 
-  .register-link {
+  .divider {
+    margin: 0 8px;
+    color: #d1d5db;
+  }
+
+  .aux-link {
     color: #3b82f6;
     text-decoration: none;
     font-weight: 500;
