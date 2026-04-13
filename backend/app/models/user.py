@@ -21,5 +21,5 @@ class User(Base, TimestampMixin):
         Enum(UserRole), nullable=False, default=UserRole.user
     )
     phone: Mapped[str | None] = mapped_column(String(20))
-    email: Mapped[str | None] = mapped_column(String(100))
+    email: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -75,6 +75,12 @@ async function handleLogin() {
           {{ loading ? '登录中...' : '登录' }}
         </el-button>
       </el-form>
+
+      <!-- 注册入口 -->
+      <p class="register-hint">
+        还没有账号？
+        <router-link to="/register" class="register-link">立即注册</router-link>
+      </p>
     </div>
   </div>
 </template>
@@ -132,6 +138,24 @@ async function handleLogin() {
   border-radius: 8px;
   font-weight: 500;
   letter-spacing: 0.5px;
+}
+
+.register-hint {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #6b7280;
+
+  .register-link {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease-in-out;
+
+    &:hover {
+      color: #2563eb;
+    }
+  }
 }
 
 :deep(.el-input__wrapper) {

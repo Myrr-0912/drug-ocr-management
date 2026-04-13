@@ -18,14 +18,18 @@ const roleLabel: Record<string, string> = {
   user: '普通用户',
 }
 
-async function handleLogout() {
-  await ElMessageBox.confirm('确定退出登录吗？', '提示', {
-    confirmButtonText: '退出',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  authStore.logout()
-  router.push('/login')
+async function handleCommand(command: string) {
+  if (command === 'profile') {
+    router.push('/profile')
+  } else if (command === 'logout') {
+    await ElMessageBox.confirm('确定退出登录吗？', '提示', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await authStore.logout()
+    router.push('/login')
+  }
 }
 </script>
 
@@ -49,7 +53,7 @@ async function handleLogout() {
           @click="router.push('/alerts')"
         />
       </el-badge>
-      <el-dropdown @command="handleLogout">
+      <el-dropdown @command="handleCommand">
         <div class="user-info">
           <el-avatar :size="32" class="user-avatar">
             {{ authStore.user?.real_name?.[0] || authStore.user?.username?.[0] || 'U' }}
@@ -69,7 +73,10 @@ async function handleLogout() {
         </div>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="logout" :icon="'SwitchButton'">
+            <el-dropdown-item command="profile" :icon="'User'">
+              个人中心
+            </el-dropdown-item>
+            <el-dropdown-item divided command="logout" :icon="'SwitchButton'">
               退出登录
             </el-dropdown-item>
           </el-dropdown-menu>

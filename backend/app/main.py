@@ -8,18 +8,33 @@ import os
 from app.config import settings
 from app.api.v1.router import api_router
 from app.tasks.scheduler import setup_scheduler
+from app.core.redis_client import init_redis, close_redis
+from app.database import AsyncSessionLocal
+from app.services.seed_service import ensure_initial_admin
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期事件"""
     os.makedirs(settings.upload_dir, exist_ok=True)
+
+    # 初始化 Redis 连接池（失败时直接终止启动，避免无 token 撤销的安全降级）
+    await init_redis()
+
+    # 首次启动时自动创建管理员账号
+    async with AsyncSessionLocal() as db:
+        await ensure_initial_admin(db)
+
     # 启动定时任务调度器
     scheduler = setup_scheduler()
     scheduler.start()
+
     yield
+
     # 关闭调度器
     scheduler.shutdown(wait=False)
+    # 关闭 Redis 连接池
+    await close_redis()
 
 
 app = FastAPI(

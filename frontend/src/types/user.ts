@@ -27,4 +27,5 @@ export interface RegisterRequest {
   password: string
   real_name?: string
   phone?: string
+  email?: string
 }

@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -18,7 +19,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(subject: str | int, role: str) -> str:
-    """生成 JWT Access Token"""
+    """生成 JWT Access Token，payload 中包含唯一 jti 用于登出黑名单"""
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.jwt_access_token_expire_minutes
     )
@@ -26,6 +27,7 @@ def create_access_token(subject: str | int, role: str) -> str:
         "sub": str(subject),
         "role": role,
         "exp": expire,
+        "jti": str(uuid.uuid4()),  # JWT ID，用于 token 黑名单
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 

@@ -17,3 +17,11 @@ export function getMe() {
 export function updateMe(data: { real_name?: string; phone?: string; email?: string }) {
   return request.put<ApiResponse<User>>('/auth/me', data)
 }
+
+export function logout() {
+  return request.post<ApiResponse<null>>('/auth/logout')
+}
+
+export function changePassword(data: { old_password: string; new_password: string }) {
+  return request.post<ApiResponse<null>>('/auth/change-password', data)
+}

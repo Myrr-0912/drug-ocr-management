@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User, LoginRequest } from '@/types/user'
-import { login as apiLogin, getMe } from '@/api/auth'
+import { login as apiLogin, getMe, logout as apiLogout } from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('access_token'))
@@ -28,7 +28,13 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('user_info', JSON.stringify(user.value))
   }
 
-  function logout() {
+  async function logout() {
+    // 先调后端注销 token（写入 Redis 黑名单），失败也继续清除本地状态
+    try {
+      await apiLogout()
+    } catch {
+      // token 已过期或网络故障，忽略并继续本地清除
+    }
     token.value = null
     user.value = null
     localStorage.removeItem('access_token')

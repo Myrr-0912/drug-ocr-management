@@ -17,6 +17,12 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
+# ===== Redis（token 黑名单 + 登录限流）=====
+redis==5.0.8
+
+# ===== 邮件格式校验 =====
+email-validator==2.2.0
+
 # ===== HTTP 客户端（百度 OCR） =====
 httpx==0.27.2
 

@@ -68,8 +68,8 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="(BATCH_STATUS_TAG[row.status] as any)" size="small">
-              {{ BATCH_STATUS_LABEL[row.status] }}
+            <el-tag :type="(BATCH_STATUS_TAG[row.status as BatchStatus] as any)" size="small">
+              {{ BATCH_STATUS_LABEL[row.status as BatchStatus] }}
             </el-tag>
           </template>
         </el-table-column>
@@ -198,7 +198,7 @@ import { Plus, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useBatchesStore } from '@/stores/batches'
 import { getDrugList } from '@/api/drugs'
-import type { Batch } from '@/types/batch'
+import type { Batch, BatchStatus } from '@/types/batch'
 import { BATCH_STATUS_LABEL, BATCH_STATUS_TAG } from '@/types/batch'
 
 const UNITS = ['盒', '瓶', '袋', '支', '片', '粒', '克', '毫升']

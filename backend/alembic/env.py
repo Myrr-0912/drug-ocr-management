@@ -20,7 +20,7 @@ config.set_main_option("sqlalchemy.url", settings.database_url)
 # 导入所有模型，确保迁移能识别表结构
 from app.models.base import Base
 from app.models import (  # noqa: F401
-    user, drug, batch, inventory, ocr_record, alert
+    user, drug, batch, inventory, ocr_record, alert, login_log
 )
 
 target_metadata = Base.metadata
