@@ -35,6 +35,112 @@
 
 ---
 
+## 👋 新用户快速上手
+
+### 第一步：准备环境
+
+安装并启动以下服务：
+
+| 服务 | 用途 | 最低版本 |
+|------|------|---------|
+| Python | 运行后端 | 3.12+ |
+| Node.js | 运行前端 | 18+ |
+| MySQL | 主数据库 | 8.0 |
+| Redis | Token 管理 + 登录限流 | 6+ |
+
+在 MySQL 中创建一个空数据库：
+
+```sql
+CREATE DATABASE drug_ocr_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### 第二步：配置并启动后端
+
+```bash
+cd backend
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 复制环境变量模板
+cp .env.example .env
+```
+
+编辑 `.env`，填写以下必填项：
+
+```env
+DB_PASSWORD=你的MySQL密码
+JWT_SECRET_KEY=（用命令生成：python -c "import secrets; print(secrets.token_urlsafe(48))"）
+ALIYUN_OCR_ACCESS_KEY_ID=你的阿里云AccessKey ID
+ALIYUN_OCR_ACCESS_KEY_SECRET=你的阿里云AccessKey Secret
+```
+
+```bash
+# 初始化数据库表结构
+alembic upgrade head
+
+# 启动后端服务
+uvicorn app.main:app --reload
+```
+
+首次启动会自动创建管理员账号，终端日志中可看到确认信息。
+
+### 第三步：启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+浏览器访问 `http://localhost:5173`
+
+### 第四步：登录系统
+
+使用自动创建的管理员账号登录：
+
+| 字段 | 值 |
+|------|-----|
+| 用户名 | `admin` |
+| 密码 | `Admin@2026!`（即 `.env` 中 `INITIAL_ADMIN_PASSWORD` 的值） |
+
+### 第五步：按角色使用功能
+
+系统共三种角色，功能权限如下：
+
+**管理员（Admin）** — 拥有全部权限
+- 在「用户管理」中为同事创建药师/普通用户账号，并分配角色
+- 查看「登录日志」审计用户操作记录
+- 手动触发预警扫描
+
+**药师（Pharmacist）** — 核心操作角色
+1. 进入「**OCR 识别**」，上传药品包装照片
+2. 系统自动识别文字，提取药品名称、批号、有效期等字段
+3. 核对识别结果后点击「**确认入库**」，药品档案与批次自动创建
+4. 在「库存管理 → 入库」中补录数量信息
+
+**普通用户** — 查看只读数据
+- 浏览药品档案、批次状态、库存流水
+- 在「预警中心」查看临期/过期/低库存预警
+
+### 第六步：日常使用流程
+
+```
+新药入库
+  └─ 药师 → OCR 识别上传图片 → 确认入库 → 库存管理录入数量
+
+查看库存状态
+  └─ 药品列表 → 点击药品 → 查看所有批次及库存
+
+预警处理
+  └─ 预警中心 → 查看临期/低库存预警 → 处理后标记已解决
+
+用户密码忘记
+  └─ 登录页「忘记密码」→ 填写邮箱 → 收取邮件 → 重置密码
+```
+
+---
+
 ## 🏗 系统运行逻辑
 
 ### 1. 后端启动流程
