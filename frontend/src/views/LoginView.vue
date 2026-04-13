@@ -75,6 +75,13 @@ async function handleLogin() {
           {{ loading ? '登录中...' : '登录' }}
         </el-button>
       </el-form>
+
+      <!-- 辅助链接区 -->
+      <div class="aux-links">
+        <router-link to="/forgot-password" class="aux-link">忘记密码？</router-link>
+        <span class="divider">·</span>
+        <router-link to="/register" class="aux-link">立即注册</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -132,6 +139,29 @@ async function handleLogin() {
   border-radius: 8px;
   font-weight: 500;
   letter-spacing: 0.5px;
+}
+
+.aux-links {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+  color: #6b7280;
+
+  .divider {
+    margin: 0 8px;
+    color: #d1d5db;
+  }
+
+  .aux-link {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease-in-out;
+
+    &:hover {
+      color: #2563eb;
+    }
+  }
 }
 
 :deep(.el-input__wrapper) {

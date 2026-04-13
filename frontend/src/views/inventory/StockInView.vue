@@ -124,8 +124,8 @@
         <el-table-column prop="batch_number" label="批号" width="130" />
         <el-table-column prop="operation_type" label="类型" width="100">
           <template #default="{ row }">
-            <el-tag :type="(OPERATION_TYPE_TAG[row.operation_type] as any)" size="small">
-              {{ OPERATION_TYPE_LABEL[row.operation_type] }}
+            <el-tag :type="(OPERATION_TYPE_TAG[row.operation_type as OperationType] as any)" size="small">
+              {{ OPERATION_TYPE_LABEL[row.operation_type as OperationType] }}
             </el-tag>
           </template>
         </el-table-column>
@@ -145,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'

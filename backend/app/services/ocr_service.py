@@ -15,7 +15,7 @@ from app.core.exceptions import NotFoundError, BusinessError
 from app.models.ocr_record import OcrRecord, OcrStatus
 from app.models.drug import Drug
 from app.models.batch import DrugBatch, BatchStatus
-from app.ocr.baidu_client import recognize_image
+from app.ocr.alibaba_client import recognize_image
 from app.ocr.text_parser import parse_drug_info
 from app.schemas.common import PageResponse
 from app.schemas.ocr import (

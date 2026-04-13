@@ -46,8 +46,8 @@
         <el-table-column prop="batch_number" label="批号" min-width="130" />
         <el-table-column prop="operation_type" label="操作类型" width="110">
           <template #default="{ row }">
-            <el-tag :type="(OPERATION_TYPE_TAG[row.operation_type] as any)" size="small">
-              {{ OPERATION_TYPE_LABEL[row.operation_type] }}
+            <el-tag :type="(OPERATION_TYPE_TAG[row.operation_type as OperationType] as any)" size="small">
+              {{ OPERATION_TYPE_LABEL[row.operation_type as OperationType] }}
             </el-tag>
           </template>
         </el-table-column>
@@ -96,7 +96,7 @@ import { reactive, onMounted } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInventoryStore } from '@/stores/inventory'
-import { OPERATION_TYPE_LABEL, OPERATION_TYPE_TAG } from '@/types/inventory'
+import { OPERATION_TYPE_LABEL, OPERATION_TYPE_TAG, type OperationType } from '@/types/inventory'
 
 const authStore = useAuthStore()
 const inventoryStore = useInventoryStore()

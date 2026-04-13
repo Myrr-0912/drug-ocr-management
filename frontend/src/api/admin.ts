@@ -40,3 +40,25 @@ export function resetPassword(userId: number, newPassword: string) {
     new_password: newPassword,
   })
 }
+
+export interface LoginLog {
+  id: number
+  username: string
+  user_id: number | null
+  ip: string | null
+  user_agent: string | null
+  success: boolean
+  failure_reason: string | null
+  created_at: string
+}
+
+export interface LoginLogQuery {
+  page?: number
+  page_size?: number
+  username?: string
+  success?: boolean
+}
+
+export function listLoginLogs(params: LoginLogQuery) {
+  return request.get<ApiResponse<PageResponse<LoginLog>>>('/admin/login-logs', { params })
+}

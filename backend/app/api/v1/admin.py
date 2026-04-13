@@ -1,10 +1,13 @@
+from datetime import datetime
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireAdmin
 from app.database import get_db
+from app.models.login_log import LoginLog
 from app.models.user import User, UserRole
 from app.schemas.common import ok
 from app.services import admin_service
@@ -90,3 +93,53 @@ async def reset_password(
 ):
     await admin_service.reset_password(db, user_id, data.new_password)
     return ok(None, "密码已重置")
+
+
+@router.get("/login-logs", summary="登录审计日志（管理员）")
+async def list_login_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    username: str | None = Query(None, description="按用户名筛选"),
+    success: bool | None = Query(None, description="True=成功 / False=失败"),
+    db: AsyncSession = Depends(get_db),
+    _: User = RequireAdmin,
+):
+    """查询登录日志，支持分页 + 按用户名 / 成功/失败筛选"""
+    conditions = []
+    if username:
+        conditions.append(LoginLog.username.ilike(f"%{username}%"))
+    if success is not None:
+        conditions.append(LoginLog.success == success)
+
+    query = select(LoginLog)
+    count_query = select(func.count()).select_from(LoginLog)
+    if conditions:
+        query = query.where(and_(*conditions))
+        count_query = count_query.where(and_(*conditions))
+
+    query = query.order_by(LoginLog.created_at.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
+    total_result = await db.execute(count_query)
+    items_result = await db.execute(query)
+    total = total_result.scalar_one()
+    items = items_result.scalars().all()
+
+    return ok({
+        "items": [
+            {
+                "id": log.id,
+                "username": log.username,
+                "user_id": log.user_id,
+                "ip": log.ip,
+                "user_agent": log.user_agent,
+                "success": log.success,
+                "failure_reason": log.failure_reason,
+                "created_at": log.created_at.isoformat(),
+            }
+            for log in items
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    })

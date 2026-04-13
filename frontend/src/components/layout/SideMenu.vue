@@ -28,6 +28,7 @@ const menuItems = computed<MenuItem[]>(() => [
   { path: '/batches', title: '批次管理', icon: 'Grid', show: true },
   { path: '/alerts', title: '预警中心', icon: 'Bell', show: true },
   { path: '/admin/users', title: '用户管理', icon: 'User', show: authStore.isAdmin },
+  { path: '/admin/login-logs', title: '登录日志', icon: 'Document', show: authStore.isAdmin },
 ])
 </script>
 
