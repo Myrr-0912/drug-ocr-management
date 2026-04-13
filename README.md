@@ -33,6 +33,149 @@
 | UI | Element Plus + ECharts |
 | 状态管理 | Pinia |
 
+---
+
+## 🏗 系统运行逻辑
+
+### 1. 后端启动流程
+
+```
+uvicorn app.main:app
+        │
+        ├─ 创建 uploads/ 目录（存储上传图片）
+        ├─ 初始化 Redis 连接池（失败则终止启动）
+        ├─ 首次启动自动创建 admin 账号（users 表为空时生效）
+        ├─ 启动 APScheduler：每天 00:05 执行预警扫描
+        └─ 挂载路由 /api/v1/* 及静态文件 /uploads/*
+```
+
+### 2. 认证流程
+
+```
+用户登录 POST /api/v1/auth/login
+        │
+        ├─ 校验密码（bcrypt）
+        ├─ 检查账号是否被封禁 / 是否触发登录限流（Redis 计数）
+        ├─ 签发 Access Token（60 分钟有效）
+        └─ 签发 Refresh Token（7 天有效，存入 Redis 白名单）
+
+后续请求：Header 携带 Bearer <AccessToken>
+        │
+        └─ JWT 解码 → 校验 Redis 黑名单（是否已登出）→ 注入 current_user
+
+Access Token 过期时：POST /api/v1/auth/refresh
+        │
+        ├─ 验证 Refresh Token 在 Redis 白名单中
+        ├─ 签发新 Access Token + 新 Refresh Token（旋转刷新）
+        └─ 旧 Refresh Token 立即失效（防重放）
+
+登出：POST /api/v1/auth/logout
+        │
+        ├─ Access Token 加入 Redis 黑名单（剩余 TTL 内失效）
+        └─ Refresh Token 从 Redis 白名单中删除
+
+忘记密码：POST /api/v1/auth/forgot-password
+        │
+        ├─ 生成重置 Token 存入 Redis（15 分钟有效）
+        └─ 通过阿里云 SMTP 发送含重置链接的邮件
+                │
+                └─ 用户点击链接 → POST /api/v1/auth/reset-password → 更新密码
+```
+
+### 3. OCR 识别入库流程
+
+```
+药师上传图片 POST /api/v1/ocr/upload
+        │
+        ├─ 校验文件类型（JPG/PNG/BMP/WebP）及大小（≤10MB）
+        ├─ 保存图片到 uploads/ocr/<uuid>.jpg
+        ├─ 创建 OcrRecord（status: pending）写入数据库
+        │
+        ├─ 调用阿里云 OCR（RecognizeGeneral）
+        │       │
+        │       ├─ SDK 同步调用在线程池中执行（不阻塞事件循环）
+        │       └─ 返回 raw_text（识别文本）+ confidence（置信度）
+        │
+        ├─ 正则解析文本 → 提取结构化字段
+        │       药品名称 / 批准文号 / 规格 / 生产企业 / 批号 / 生产日期 / 有效期
+        │
+        └─ 更新 OcrRecord（status: success，存储 extracted_data）
+
+药师核对后确认 POST /api/v1/ocr/{id}/confirm
+        │
+        ├─ 按药品名+批准文号查找已有药品，不存在则创建 Drug 记录
+        ├─ 根据有效期自动计算批次状态（normal / near_expiry / expired）
+        ├─ 创建 DrugBatch 记录，关联 source_ocr_id
+        └─ OcrRecord 状态更新为 confirmed
+```
+
+### 4. 库存管理流程
+
+```
+入库 POST /api/v1/inventory/stock-in
+出库 POST /api/v1/inventory/stock-out
+盘点 POST /api/v1/inventory/adjust
+        │
+        ├─ 操作对应 DrugBatch.quantity（数量变更）
+        └─ 写入 InventoryLog 流水记录（类型 / 数量 / 操作人 / 时间）
+```
+
+### 5. 预警系统流程
+
+```
+自动触发：APScheduler 每天 00:05
+手动触发：POST /api/v1/alerts/scan（管理员）
+        │
+        ├─ 扫描所有批次：
+        │       ├─ expiry_date < today          → 生成"已过期"预警
+        │       ├─ expiry_date ≤ today+30天     → 生成"临期"预警
+        │       └─ quantity ≤ LOW_STOCK(10)     → 生成"库存不足"预警
+        │
+        └─ 去重写入 Alert 表（同批次同类型不重复创建）
+
+前端预警中心：
+        ├─ 查看预警列表（按类型/状态筛选）
+        ├─ 批量标记已读 PATCH /api/v1/alerts/read
+        └─ 标记已解决 PATCH /api/v1/alerts/{id}/resolve
+```
+
+### 6. 前端路由与权限控制
+
+```
+未登录用户：只能访问 /login  /register  /forgot-password  /reset-password
+
+登录后（所有角色）：
+        /dashboard          仪表盘（ECharts 概览图表）
+        /drugs              药品档案列表 / 详情
+        /batches            批次管理
+        /inventory          库存流水
+        /alerts             预警中心
+        /profile            个人中心（修改密码/信息）
+
+仅药师及以上：
+        /ocr/upload         OCR 拍照识别上传
+        /inventory/stock-in 入库操作
+
+仅管理员：
+        /admin/users        用户管理（创建/封禁/重置密码）
+        /admin/login-logs   登录审计日志
+```
+
+### 7. API 端点总览
+
+| 模块 | 前缀 | 主要端点 |
+|------|------|---------|
+| 认证 | `/api/v1/auth` | login / logout / refresh / register / forgot-password / reset-password |
+| 药品 | `/api/v1/drugs` | CRUD + 分页搜索 |
+| OCR | `/api/v1/ocr` | upload / confirm / list / delete |
+| 批次 | `/api/v1/batches` | CRUD + 状态筛选 |
+| 库存 | `/api/v1/inventory` | stock-in / stock-out / adjust / 流水查询 |
+| 预警 | `/api/v1/alerts` | list / scan / read / resolve / stats |
+| 统计 | `/api/v1/stats` | overview / inventory-trend / expiry-distribution |
+| 管理员 | `/api/v1/admin` | 用户 CRUD / 重置密码 / 登录日志 |
+
+---
+
 ## 🚀 快速开始
 
 ### 环境要求
@@ -88,7 +231,9 @@ npm run dev
 | `ALIYUN_OCR_ACCESS_KEY_SECRET` | 阿里云 RAM AccessKey Secret | ✅ |
 | `REDIS_HOST` | Redis 地址，默认 `localhost` | — |
 | `SMTP_USER` / `SMTP_PASSWORD` | 阿里云 SMTP 账号（忘记密码功能） | — |
-| `INITIAL_ADMIN_PASSWORD` | 首次启动创建的 admin 密码 | — |
+| `INITIAL_ADMIN_PASSWORD` | 首次启动创建的 admin 密码，默认 `Admin@2026!` | — |
+| `EXPIRY_WARNING_DAYS` | 临期预警提前天数，默认 `30` | — |
+| `LOW_STOCK_THRESHOLD` | 低库存预警阈值（件），默认 `10` | — |
 
 ## 📁 项目结构
 
@@ -96,7 +241,7 @@ npm run dev
 .
 ├── backend/                 # FastAPI 后端
 │   ├── app/
-│   │   ├── api/v1/         # 路由层（auth/drugs/ocr/inventory/alerts/users）
+│   │   ├── api/v1/         # 路由层（auth/drugs/ocr/inventory/alerts/stats/admin）
 │   │   ├── models/         # SQLAlchemy ORM 模型
 │   │   ├── schemas/        # Pydantic 请求/响应模型
 │   │   ├── services/       # 业务逻辑层
@@ -108,7 +253,7 @@ npm run dev
     └── src/
         ├── views/          # 页面组件（登录/仪表盘/药品/OCR/预警/用户管理）
         ├── components/     # 通用组件
-        ├── stores/         # Pinia 状态（auth/drug/alert）
+        ├── stores/         # Pinia 状态（auth/drug/alert/inventory/batch/ocr）
         └── api/            # Axios 封装
 ```
 
