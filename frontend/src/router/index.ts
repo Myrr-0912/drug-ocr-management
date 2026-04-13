@@ -11,6 +11,24 @@ const router = createRouter({
       meta: { requiresAuth: false },
     },
     {
+      path: '/register',
+      name: 'Register',
+      component: () => import('@/views/RegisterView.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/forgot-password',
+      name: 'ForgotPassword',
+      component: () => import('@/views/ForgotPasswordView.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/reset-password',
+      name: 'ResetPassword',
+      component: () => import('@/views/ResetPasswordView.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
       path: '/',
       component: () => import('@/components/layout/AppLayout.vue'),
       meta: { requiresAuth: true },
@@ -65,10 +83,22 @@ const router = createRouter({
           meta: { title: '预警中心' },
         },
         {
+          path: 'profile',
+          name: 'Profile',
+          component: () => import('@/views/ProfileView.vue'),
+          meta: { title: '个人中心' },
+        },
+        {
           path: 'admin/users',
           name: 'UserManage',
           component: () => import('@/views/admin/UserManageView.vue'),
           meta: { title: '用户管理', adminOnly: true },
+        },
+        {
+          path: 'admin/login-logs',
+          name: 'LoginLogs',
+          component: () => import('@/views/admin/LoginLogView.vue'),
+          meta: { title: '登录日志', adminOnly: true },
         },
       ],
     },

@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAlertsStore } from '@/stores/alerts'
 import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const alertsStore = useAlertsStore()
+
+// 应用启动时静默加载未读数
+onMounted(() => alertsStore.loadStats())
 
 const roleLabel: Record<string, string> = {
   admin: '管理员',
@@ -12,14 +18,18 @@ const roleLabel: Record<string, string> = {
   user: '普通用户',
 }
 
-async function handleLogout() {
-  await ElMessageBox.confirm('确定退出登录吗？', '提示', {
-    confirmButtonText: '退出',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  authStore.logout()
-  router.push('/login')
+async function handleCommand(command: string) {
+  if (command === 'profile') {
+    router.push('/profile')
+  } else if (command === 'logout') {
+    await ElMessageBox.confirm('确定退出登录吗？', '提示', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await authStore.logout()
+    router.push('/login')
+  }
 }
 </script>
 
@@ -29,7 +39,21 @@ async function handleLogout() {
       <!-- 预留面包屑位置 -->
     </div>
     <div class="header-right">
-      <el-dropdown @command="handleLogout">
+      <!-- 预警徽标 -->
+      <el-badge
+        :value="alertsStore.unreadCount"
+        :hidden="alertsStore.unreadCount === 0"
+        class="alert-badge"
+      >
+        <el-button
+          circle
+          size="small"
+          :icon="'Bell'"
+          class="bell-btn"
+          @click="router.push('/alerts')"
+        />
+      </el-badge>
+      <el-dropdown @command="handleCommand">
         <div class="user-info">
           <el-avatar :size="32" class="user-avatar">
             {{ authStore.user?.real_name?.[0] || authStore.user?.username?.[0] || 'U' }}
@@ -49,7 +73,10 @@ async function handleLogout() {
         </div>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="logout" :icon="'SwitchButton'">
+            <el-dropdown-item command="profile" :icon="'User'">
+              个人中心
+            </el-dropdown-item>
+            <el-dropdown-item divided command="logout" :icon="'SwitchButton'">
               退出登录
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -108,5 +135,20 @@ async function handleLogout() {
 .dropdown-icon {
   color: #9ca3af;
   font-size: 12px;
+}
+
+.alert-badge {
+  margin-right: 8px;
+}
+
+.bell-btn {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
 }
 </style>
