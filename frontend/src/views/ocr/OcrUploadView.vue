@@ -97,6 +97,9 @@
               :stroke-width="8"
               class="confidence-bar"
             />
+            <span class="confidence-source-tag" :class="ocrStore.currentRecord.extracted_data?.confidence_estimated ? 'is-estimated' : 'is-real'">
+              {{ ocrStore.currentRecord.extracted_data?.confidence_estimated ? '估算值' : 'API 真实数据' }}
+            </span>
           </div>
 
           <!-- 原始 OCR 文本（调试用，可折叠） -->
@@ -266,10 +269,13 @@
             {{ row.extracted_data?.expiry_date || '—' }}
           </template>
         </el-table-column>
-        <el-table-column label="置信度" width="100">
+        <el-table-column label="置信度" width="140">
           <template #default="{ row }">
             <span v-if="row.confidence != null">
               {{ Math.round(row.confidence * 100) }}%
+              <span class="confidence-source-tag" :class="row.extracted_data?.confidence_estimated ? 'is-estimated' : 'is-real'">
+                {{ row.extracted_data?.confidence_estimated ? '估算值' : 'API 真实数据' }}
+              </span>
             </span>
             <span v-else>—</span>
           </template>
@@ -640,6 +646,20 @@ onMounted(loadHistory)
 }
 .confidence-bar {
   flex: 1;
+}
+.confidence-source-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  &.is-real {
+    color: #15803d;
+    background: #dcfce7;
+  }
+  &.is-estimated {
+    color: #92400e;
+    background: #fef3c7;
+  }
 }
 
 .form-section-title {

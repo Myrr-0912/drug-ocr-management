@@ -77,14 +77,19 @@ def _recognize_sync(image_bytes: bytes) -> dict:
             prob_sum += prob / 1000.0
             prob_count += 1
 
-    confidence = round(prob_sum / prob_count, 2) if prob_count > 0 else (
-        min(1.0, round(len(words_result) / 20.0, 2)) if words_result else 0.0
-    )
+    if prob_count > 0:
+        confidence = round(prob_sum / prob_count, 2)
+        confidence_estimated = False
+    else:
+        # API 未返回概率，按词块数量估算
+        confidence = min(1.0, round(len(words_result) / 20.0, 2)) if words_result else 0.0
+        confidence_estimated = True
 
     return {
         "raw_text": raw_text,
         "words_result": words_result,
         "confidence": confidence,
+        "confidence_estimated": confidence_estimated,
     }
 
 

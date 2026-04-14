@@ -10,6 +10,7 @@ export interface ExtractedDrugData {
   production_date?: string  // YYYY-MM-DD 字符串
   expiry_date?: string      // YYYY-MM-DD 字符串
   quantity?: number
+  confidence_estimated?: boolean  // true = 估算值，false/undefined = API 真实数据
 }
 
 /** OCR 识别记录 */

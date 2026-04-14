@@ -82,12 +82,16 @@ async def upload_and_recognize(
         ocr_result = await recognize_image(image_bytes)
         raw_text = ocr_result.get("raw_text", "")
         confidence = ocr_result.get("confidence", 0.0)
+        confidence_estimated = ocr_result.get("confidence_estimated", False)
 
         # 6. 解析结构化药品信息
         extracted = parse_drug_info(raw_text)
 
+        extracted_dict = extracted.model_dump(exclude_none=True)
+        extracted_dict["confidence_estimated"] = confidence_estimated  # 记录置信度来源
+
         record.raw_text = raw_text
-        record.extracted_data = extracted.model_dump(exclude_none=True)
+        record.extracted_data = extracted_dict
         record.confidence = confidence
         record.status = OcrStatus.success
 
