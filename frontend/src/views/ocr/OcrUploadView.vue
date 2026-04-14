@@ -99,6 +99,13 @@
             />
           </div>
 
+          <!-- 原始 OCR 文本（调试用，可折叠） -->
+          <el-collapse v-if="ocrStore.currentRecord.raw_text" class="raw-text-collapse mb-16">
+            <el-collapse-item title="原始识别文本（调试）" name="raw">
+              <pre class="raw-text-pre">{{ ocrStore.currentRecord.raw_text }}</pre>
+            </el-collapse-item>
+          </el-collapse>
+
           <!-- 可编辑确认表单 -->
           <el-form
             ref="confirmFormRef"
@@ -361,7 +368,11 @@ function triggerFilePicker() {
 
 function handleFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) setFile(file)
+  if (file) {
+    setFile(file)
+    // 清空 input 原生值，使同一文件下次仍可触发 @change
+    ;(e.target as HTMLInputElement).value = ''
+  }
 }
 
 function handleDrop(e: DragEvent) {
@@ -393,6 +404,9 @@ async function startRecognize() {
     confirmForm.quantity = d.quantity ?? 0
     confirmForm.unit = '盒'
 
+    // 新记录已写入 DB，立即刷新历史列表使其可见（用户取消时不需再刷新页面）
+    loadHistory()
+
     if (record.status === 'failed') {
       ElMessage.error('识别失败：' + (record.error_message || '请重试'))
     } else {
@@ -419,11 +433,17 @@ function resetResult() {
   ocrStore.currentRecord = null
   selectedFile.value = null
   previewUrl.value = ''
+  // 清空 input 的原生值，确保选同一文件时仍能触发 @change
+  if (fileInput.value) fileInput.value.value = ''
 }
 
 async function handleDelete(row: { id: number; status: string }) {
-  await ElMessageBox.confirm('确认删除该识别记录？', '提示', { type: 'warning' })
-  await ocrStore.deleteRecord(row.id)
+  try {
+    await ElMessageBox.confirm('确认删除该识别记录？', '提示', { type: 'warning' })
+    await ocrStore.deleteRecord(row.id)
+  } catch {
+    // 用户点击弹框"取消"，忽略
+  }
 }
 
 function loadHistory() {
@@ -646,6 +666,25 @@ onMounted(loadHistory)
 }
 .mb-16 {
   margin-bottom: 16px;
+}
+
+/* 原始文本折叠 */
+.raw-text-collapse {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+.raw-text-pre {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 4px;
+  background: #f9fafb;
+  border-radius: 4px;
 }
 
 /* 历史记录 */

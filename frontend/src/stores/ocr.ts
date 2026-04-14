@@ -63,6 +63,10 @@ export const useOcrStore = defineStore('ocr', () => {
       ElMessage.success('删除成功')
       records.value = records.value.filter((r) => r.id !== id)
       total.value--
+      // 若删除的是当前正在查看的记录，同步清空右侧面板，防止后续入库失败
+      if (currentRecord.value?.id === id) {
+        currentRecord.value = null
+      }
       return true
     } catch {
       return false

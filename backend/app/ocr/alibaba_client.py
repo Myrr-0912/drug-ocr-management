@@ -54,14 +54,19 @@ def _recognize_sync(image_bytes: bytes) -> dict:
     raw_data_str = response.body.data if response.body and response.body.data else "{}"
     data = json.loads(raw_data_str)
 
-    raw_text = data.get("content", "")
-
     # 解析词条列表及置信度（字段名为 prism_wordsInfo）
     words_result = []
     prob_sum = 0.0
     prob_count = 0
 
     prism_info = data.get("prism_wordsInfo", [])
+
+    # 优先用 prism_wordsInfo 逐词块拼接（每个词块独立一行），
+    # 比 content 连续长字符串对正则解析更友好
+    if prism_info:
+        raw_text = "\n".join(item.get("word", "") for item in prism_info if item.get("word"))
+    else:
+        raw_text = data.get("content", "")
     for item in prism_info:
         word = item.get("word", "")
         if word:

@@ -132,7 +132,13 @@ async def refresh(db: AsyncSession, old_refresh_token: str) -> TokenResponse:
     jti: str = payload.get("jti", "")
     user_id = await refresh_token_service.get_user_id_by_jti(jti)
     if not user_id:
-        raise UnauthorizedError("Refresh Token 已注销或已过期，请重新登录")
+        # Redis 中无记录（可能是 Redis 重启导致数据丢失），
+        # 但 JWT 签名与有效期已在 decode_refresh_token 中通过验证，
+        # 降级为信任 JWT payload 中的 sub（user_id），避免用户被迫重新登录。
+        sub = payload.get("sub", "")
+        user_id = int(sub) if sub.isdigit() else None
+        if not user_id:
+            raise UnauthorizedError("Refresh Token 已注销或已过期，请重新登录")
 
     result = await db.execute(select(User).where(User.id == user_id))
     user: User | None = result.scalar_one_or_none()

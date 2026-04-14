@@ -4,9 +4,9 @@ import type { User, LoginRequest } from '@/types/user'
 import { login as apiLogin, getMe, logout as apiLogout, refreshToken as apiRefreshToken } from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('access_token'))
-  const refreshTokenVal = ref<string | null>(localStorage.getItem('refresh_token'))
-  const user = ref<User | null>(JSON.parse(localStorage.getItem('user_info') || 'null'))
+  const token = ref<string | null>(sessionStorage.getItem('access_token'))
+  const refreshTokenVal = ref<string | null>(sessionStorage.getItem('refresh_token'))
+  const user = ref<User | null>(JSON.parse(sessionStorage.getItem('user_info') || 'null'))
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
@@ -20,15 +20,15 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = access_token
     refreshTokenVal.value = refresh_token
     user.value = userInfo
-    localStorage.setItem('access_token', access_token)
-    localStorage.setItem('refresh_token', refresh_token)
-    localStorage.setItem('user_info', JSON.stringify(userInfo))
+    sessionStorage.setItem('access_token', access_token)
+    sessionStorage.setItem('refresh_token', refresh_token)
+    sessionStorage.setItem('user_info', JSON.stringify(userInfo))
   }
 
   async function fetchMe() {
     const resp = await getMe()
     user.value = resp.data.data!
-    localStorage.setItem('user_info', JSON.stringify(user.value))
+    sessionStorage.setItem('user_info', JSON.stringify(user.value))
   }
 
   /** 用 Refresh Token 换取新 Access Token（axios 拦截器调用）*/
@@ -40,8 +40,8 @@ export const useAuthStore = defineStore('auth', () => {
       const { access_token, refresh_token } = resp.data.data!
       token.value = access_token
       refreshTokenVal.value = refresh_token
-      localStorage.setItem('access_token', access_token)
-      localStorage.setItem('refresh_token', refresh_token)
+      sessionStorage.setItem('access_token', access_token)
+      sessionStorage.setItem('refresh_token', refresh_token)
       return access_token
     } catch {
       // refresh token 也失效，清理登录状态
@@ -64,9 +64,9 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     refreshTokenVal.value = null
     user.value = null
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('user_info')
+    sessionStorage.removeItem('access_token')
+    sessionStorage.removeItem('refresh_token')
+    sessionStorage.removeItem('user_info')
   }
 
   return {

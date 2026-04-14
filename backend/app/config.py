@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     login_max_failures: int = 5
     login_lockout_minutes: int = 15
 
+    # DeepSeek API 配置
+    deepseek_api_key: str = ""
+
     # 阿里云 OCR API 配置
     aliyun_ocr_access_key_id: str = ""
     aliyun_ocr_access_key_secret: str = ""
