@@ -23,7 +23,7 @@ const menuItems = computed<MenuItem[]>(() => [
     icon: 'Camera',
     show: authStore.isPharmacist,
   },
-  { path: '/drugs', title: '药品管理', icon: 'MedicineBox', show: true },
+  { path: '/drugs', title: '药品管理', icon: 'FirstAidKit', show: true },
   { path: '/inventory', title: '库存管理', icon: 'Box', show: true },
   { path: '/batches', title: '批次管理', icon: 'Grid', show: true },
   { path: '/alerts', title: '预警中心', icon: 'Bell', show: true },
@@ -40,7 +40,7 @@ const menuItems = computed<MenuItem[]>(() => [
     :collapse="false"
   >
     <div class="menu-logo">
-      <el-icon size="20" color="#3b82f6"><MedicineBox /></el-icon>
+      <el-icon size="20" color="#3b82f6"><FirstAidKit /></el-icon>
       <span class="logo-text">药品管理</span>
     </div>
 

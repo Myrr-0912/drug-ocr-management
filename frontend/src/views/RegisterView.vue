@@ -69,7 +69,7 @@ async function handleRegister() {
       <!-- 品牌标识区 -->
       <div class="brand">
         <div class="brand-icon">
-          <el-icon size="32" color="#3b82f6"><MedicineBox /></el-icon>
+          <el-icon size="32" color="#3b82f6"><FirstAidKit /></el-icon>
         </div>
         <h1 class="brand-title">创建账号</h1>
         <p class="brand-subtitle">加入药品智能管理系统</p>

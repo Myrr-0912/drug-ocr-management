@@ -107,10 +107,16 @@ const router = createRouter({
   ],
 })
 
-// 路由守卫：未登录跳转 /login，权限不足提示
+// 路由守卫：未登录跳转 /login；已登录不允许进入登录/注册页
 router.beforeEach((to) => {
   const auth = useAuthStore()
 
+  // 已登录时访问无需认证页（login/register 等），直接跳 dashboard
+  if (to.meta.requiresAuth === false && auth.isLoggedIn) {
+    return { name: 'Dashboard' }
+  }
+
+  // 未登录访问需认证页，跳登录
   if (to.meta.requiresAuth !== false && !auth.isLoggedIn) {
     return { name: 'Login' }
   }

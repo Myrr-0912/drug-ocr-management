@@ -36,7 +36,7 @@ async function handleLogin() {
       <!-- 品牌标识区 -->
       <div class="brand">
         <div class="brand-icon">
-          <el-icon size="32" color="#3b82f6"><MedicineBox /></el-icon>
+          <el-icon size="32" color="#3b82f6"><FirstAidKit /></el-icon>
         </div>
         <h1 class="brand-title">药品智能管理系统</h1>
         <p class="brand-subtitle">基于 AI OCR 的药品信息识别与管理平台</p>

@@ -166,17 +166,21 @@ async def logout_with_refresh(access_token: str, refresh_token_str: str | None) 
 
 
 async def forgot_password(db: AsyncSession, email: str) -> None:
-    """忘记密码：验证邮箱存在 → 生成重置 token → 发送邮件
-
-    安全：无论邮箱是否存在均返回成功（防枚举）
-    """
+    """忘记密码：验证邮箱存在 → 生成重置 token → 发送邮件"""
     result = await db.execute(select(User).where(User.email == email))
     user: User | None = result.scalar_one_or_none()
-    if not user or not user.is_active:
-        return  # 静默返回，不暴露账号是否存在
+    if not user:
+        raise BusinessError("该邮箱未注册，请确认后重试")
+    if not user.is_active:
+        raise BusinessError("该账号已被禁用，请联系管理员")
 
     token = await password_reset_service.create_reset_token(user.id)
-    await email_service.send_reset_password_email(email, user.username, token)
+    try:
+        await email_service.send_reset_password_email(email, user.username, token)
+    except Exception:
+        # 邮件发送失败时撤销 token，避免 Redis 中遗留无效 key
+        await password_reset_service.revoke_reset_token(token)
+        raise BusinessError("邮件发送失败，请稍后再试")
 
 
 async def reset_password(db: AsyncSession, token: str, new_password: str) -> None:

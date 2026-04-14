@@ -3,14 +3,35 @@
 SMTP 配置通过 .env 注入，支持 SSL（端口 465）和 STARTTLS（端口 587）。
 """
 import logging
+import re
+from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 
 import aiosmtplib
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _encode_header(text: str) -> str:
+    """若包含非 ASCII 字符，使用 RFC2047 MIME 编码，确保邮件头合规"""
+    try:
+        text.encode("ascii")
+        return text
+    except UnicodeEncodeError:
+        return str(Header(text, "utf-8"))
+
+
+def _make_from(smtp_from: str) -> str:
+    """解析 '显示名 <邮箱>' 格式并对显示名做 MIME 编码"""
+    m = re.match(r"^(.+?)\s*<([^>]+)>$", smtp_from.strip())
+    if m:
+        display_name, addr = m.group(1).strip(), m.group(2).strip()
+        return formataddr((_encode_header(display_name), addr))
+    return smtp_from
 
 
 async def send_email(to: str, subject: str, html_body: str) -> None:
@@ -26,8 +47,8 @@ async def send_email(to: str, subject: str, html_body: str) -> None:
         return
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = settings.smtp_from or settings.smtp_user
+    msg["Subject"] = _encode_header(subject)  # 中文 Subject 做 RFC2047 编码
+    msg["From"] = _make_from(settings.smtp_from or settings.smtp_user)  # 中文显示名编码
     msg["To"] = to
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
@@ -39,6 +60,7 @@ async def send_email(to: str, subject: str, html_body: str) -> None:
             username=settings.smtp_user,
             password=settings.smtp_password,
             use_tls=settings.smtp_use_ssl,
+            timeout=30,
         )
         logger.info("邮件发送成功：%s → %s", subject, to)
     except Exception as exc:

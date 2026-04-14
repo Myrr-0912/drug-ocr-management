@@ -63,7 +63,7 @@ async def forgot_password(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await auth_service.forgot_password(db, data.email)
-    return ok(None, "如果该邮箱已注册，重置邮件将在几分钟内发送")
+    return ok(None, "重置密码邮件已发送，请查收（15 分钟内有效）")
 
 
 @router.post("/reset-password", summary="重置密码（凭 token 设置新密码）")
