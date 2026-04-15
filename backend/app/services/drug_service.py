@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError, ConflictError
 from app.models.drug import Drug
+from app.models.batch import DrugBatch
 from app.schemas.common import PageResponse
 from app.schemas.drug import DrugCreate, DrugUpdate, DrugListQuery, DrugResponse
 
@@ -59,8 +60,17 @@ async def update_drug(db: AsyncSession, drug_id: int, data: DrugUpdate) -> Drug:
 
 
 async def delete_drug(db: AsyncSession, drug_id: int) -> None:
-    """删除药品"""
+    """删除药品（有关联批次时拒绝删除）"""
     drug = await get_drug(db, drug_id)
+
+    # 检查是否存在关联批次，RESTRICT 约束下不可强删
+    batch_count_result = await db.execute(
+        select(func.count()).where(DrugBatch.drug_id == drug_id)
+    )
+    batch_count = batch_count_result.scalar_one()
+    if batch_count > 0:
+        raise ConflictError(f"该药品下存在 {batch_count} 条批次记录，请先删除相关批次后再删除药品")
+
     await db.delete(drug)
     await db.flush()
 

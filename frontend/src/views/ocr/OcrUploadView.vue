@@ -298,7 +298,7 @@
               type="danger"
               text
               size="small"
-              :disabled="row.status === 'confirmed'"
+              :disabled="row.status === 'confirmed' && !authStore.isAdmin"
               @click="handleDelete(row)"
             >
               删除

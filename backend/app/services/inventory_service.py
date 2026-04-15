@@ -124,6 +124,31 @@ async def adjust(db: AsyncSession, data: AdjustRequest, operator_id: int) -> Inv
     return await _to_response(db, record)
 
 
+async def delete_record(db: AsyncSession, record_id: int) -> None:
+    """删除库存流水并回滚对应批次库存量"""
+    result = await db.execute(select(InventoryRecord).where(InventoryRecord.id == record_id))
+    record = result.scalar_one_or_none()
+    if not record:
+        raise NotFoundError(f"流水记录 ID {record_id} 不存在")
+
+    # 取关联批次
+    batch_result = await db.execute(select(DrugBatch).where(DrugBatch.id == record.batch_id))
+    batch = batch_result.scalar_one_or_none()
+    if not batch:
+        raise NotFoundError(f"批次 ID {record.batch_id} 不存在，无法回滚库存")
+
+    # 反向修正库存（record.quantity：入库正/出库负/盘点 diff）
+    new_quantity = batch.quantity - record.quantity
+    if new_quantity < 0:
+        raise BusinessError(
+            f"回滚该记录将导致批次库存变为 {new_quantity}，无法删除。请先处理后续流水记录。"
+        )
+    batch.quantity = new_quantity
+
+    await db.delete(record)
+    await db.flush()
+
+
 async def list_records(
     db: AsyncSession, query: InventoryListQuery
 ) -> PageResponse[InventoryRecordResponse]:

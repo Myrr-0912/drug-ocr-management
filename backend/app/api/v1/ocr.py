@@ -79,9 +79,9 @@ async def get_record(
 async def delete_record(
     record_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = RequireLogin,
+    current_user: User = RequireLogin,
 ):
-    """删除识别记录（已确认入库的记录不允许删除）"""
-    await ocr_service.delete_record(db=db, record_id=record_id)
+    """删除识别记录；管理员可删已确认记录，普通用户不可"""
+    await ocr_service.delete_record(db=db, record_id=record_id, is_admin=current_user.role == "admin")
     await db.commit()
     return ok(None, "删除成功")

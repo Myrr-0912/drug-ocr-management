@@ -13,9 +13,22 @@ const request = axios.create({
   timeout: 15000,
 })
 
-// 请求拦截器：自动注入最新 Access Token
+// refresh 锁：防止多个并发 401 同时触发多次 refresh
+let isRefreshing = false
+let refreshSubscribers: ((token: string) => void)[] = []
+
+function subscribeTokenRefresh(cb: (token: string) => void) {
+  refreshSubscribers.push(cb)
+}
+
+function onRefreshed(token: string) {
+  refreshSubscribers.forEach((cb) => cb(token))
+  refreshSubscribers = []
+}
+
+// 请求拦截器：自动注入最新 Access Token（读 sessionStorage，与 auth store 保持一致）
 request.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
+  const token = sessionStorage.getItem('access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -39,17 +52,35 @@ request.interceptors.response.use(
 
     // 401 处理：先尝试用 refresh_token 续期，失败再跳登录
     if (status === 401 && !config._retry) {
+      // 若已有 refresh 进行中，将本请求排队，等 refresh 完成后统一重试
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          subscribeTokenRefresh((token: string) => {
+            config.headers.Authorization = `Bearer ${token}`
+            resolve(request(config))
+          })
+        })
+      }
+
       config._retry = true
+      isRefreshing = true
+
       // 动态 import 避免循环依赖
       const { useAuthStore } = await import('@/stores/auth')
       const authStore = useAuthStore()
       const newToken = await authStore.refreshAccessToken()
+      isRefreshing = false
+
       if (newToken) {
-        // 续期成功：用新 token 重试原请求
+        // 唤醒所有排队请求
+        onRefreshed(newToken)
+        // 重试当前请求
         config.headers.Authorization = `Bearer ${newToken}`
         return request(config)
       }
-      // refresh 也失败，跳转登录
+
+      // refresh 也失败，清空队列并跳转登录
+      refreshSubscribers = []
       window.location.href = '/login'
       return Promise.reject(error)
     }

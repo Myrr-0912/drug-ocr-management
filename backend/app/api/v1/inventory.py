@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import RequireLogin, RequirePharmacist
+from app.api.deps import RequireLogin, RequirePharmacist, RequireAdmin
 from app.database import get_db
 from app.models.inventory import OperationType
 from app.models.user import User
@@ -62,3 +62,13 @@ async def adjust(
 ):
     record = await inventory_service.adjust(db, data, operator_id=current_user.id)
     return ok(record, "盘点调整成功")
+
+
+@router.delete("/{record_id}", summary="删除库存流水（仅管理员）")
+async def delete_record(
+    record_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, RequireAdmin],
+):
+    await inventory_service.delete_record(db, record_id)
+    return ok(None, "删除成功")

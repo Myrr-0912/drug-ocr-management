@@ -232,13 +232,13 @@ async def list_records(
     )
 
 
-async def delete_record(db: AsyncSession, record_id: int) -> None:
-    """删除 OCR 记录（已确认入库的记录不允许删除）"""
+async def delete_record(db: AsyncSession, record_id: int, is_admin: bool = False) -> None:
+    """删除 OCR 记录；管理员可删任意状态，普通用户不可删已确认记录"""
     result = await db.execute(select(OcrRecord).where(OcrRecord.id == record_id))
     record = result.scalar_one_or_none()
     if not record:
         raise NotFoundError(f"OCR 记录 {record_id} 不存在")
-    if record.status == OcrStatus.confirmed:
-        raise BusinessError("已确认入库的记录不允许删除")
+    if record.status == OcrStatus.confirmed and not is_admin:
+        raise BusinessError("已确认入库的记录不允许删除，如需删除请联系管理员")
     await db.delete(record)
     await db.flush()

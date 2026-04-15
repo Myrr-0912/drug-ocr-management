@@ -73,6 +73,23 @@
             {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
+        <!-- 仅管理员可删除 -->
+        <el-table-column v-if="authStore.isAdmin" label="操作" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-popconfirm
+              title="删除将回滚批次库存，确认？"
+              confirm-button-text="删除"
+              cancel-button-text="取消"
+              confirm-button-type="danger"
+              width="220"
+              @confirm="handleDelete(row.id)"
+            >
+              <template #reference>
+                <el-button text type="danger" size="small">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
       </el-table>
 
       <!-- 分页 -->
@@ -93,10 +110,12 @@
 
 <script setup lang="ts">
 import { reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInventoryStore } from '@/stores/inventory'
 import { OPERATION_TYPE_LABEL, OPERATION_TYPE_TAG, type OperationType } from '@/types/inventory'
+import { deleteInventoryRecord } from '@/api/inventory'
 
 const authStore = useAuthStore()
 const inventoryStore = useInventoryStore()
@@ -122,6 +141,16 @@ async function loadRecords() {
 
 function formatTime(iso: string) {
   return iso ? iso.replace('T', ' ').slice(0, 19) : '—'
+}
+
+async function handleDelete(id: number) {
+  try {
+    await deleteInventoryRecord(id)
+    ElMessage.success('删除成功，库存已回滚')
+    await loadRecords()
+  } catch {
+    // 错误由 axios 拦截器统一弹出
+  }
 }
 
 onMounted(loadRecords)

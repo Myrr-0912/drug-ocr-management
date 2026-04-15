@@ -27,3 +27,8 @@ export function stockOut(data: StockOutRequest) {
 export function adjustInventory(data: AdjustRequest) {
   return request.post<ApiResponse<InventoryRecord>>('/inventory/adjust', data)
 }
+
+/** 删除库存流水记录（仅管理员） */
+export function deleteInventoryRecord(id: number) {
+  return request.delete<ApiResponse<null>>(`/inventory/${id}`)
+}
