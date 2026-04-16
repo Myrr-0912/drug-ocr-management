@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onActivated, computed } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, PieChart } from 'echarts/charts'
@@ -146,6 +146,7 @@ async function loadAll() {
 }
 
 onMounted(loadAll)
+onActivated(loadAll)
 </script>
 
 <template>

@@ -27,7 +27,6 @@ async def scan_and_create_alerts(db: AsyncSession) -> dict[str, int]:
     stmt = (
         select(DrugBatch, Drug.name.label("drug_name"))
         .join(Drug, DrugBatch.drug_id == Drug.id)
-        .where(Drug.is_active.is_(True))
     )
     rows = (await db.execute(stmt)).all()
 

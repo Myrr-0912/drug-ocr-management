@@ -47,7 +47,7 @@ async function handleLogin() {
         <el-form-item prop="username">
           <el-input
             v-model="form.username"
-            placeholder="用户名"
+            placeholder="用户名或邮箱"
             size="large"
             :prefix-icon="'User'"
             autocomplete="username"

@@ -40,6 +40,7 @@ const rules = {
     },
   ],
   email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
   ],
 }
@@ -51,8 +52,8 @@ async function handleRegister() {
     await register({
       username: form.username,
       password: form.password,
+      email: form.email,
       real_name: form.real_name || undefined,
-      email: form.email || undefined,
       phone: form.phone || undefined,
     })
     ElMessage.success('注册成功，请登录')
@@ -123,10 +124,10 @@ async function handleRegister() {
         </el-form-item>
 
         <div class="form-row">
-          <el-form-item label="邮箱" prop="email">
+          <el-form-item label="邮箱" prop="email" required>
             <el-input
               v-model="form.email"
-              placeholder="选填，用于找回密码"
+              placeholder="请输入邮箱，用于找回密码"
               size="large"
               autocomplete="email"
             />

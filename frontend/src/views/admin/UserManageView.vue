@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { User, UserRole } from '@/types/user'
 import {
@@ -170,6 +170,7 @@ const roleOptions: { label: string; value: UserRole }[] = [
 ]
 
 onMounted(fetchUsers)
+onActivated(fetchUsers)
 </script>
 
 <template>

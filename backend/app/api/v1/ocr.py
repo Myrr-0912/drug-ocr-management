@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireLogin, get_current_user
 from app.database import get_db
-from app.models.ocr_record import OcrStatus
 from app.models.user import User
 from app.schemas.common import PageResponse, ok
 from app.schemas.ocr import OcrConfirmRequest, OcrConfirmResponse, OcrListQuery, OcrRecordResponse
@@ -53,7 +52,7 @@ async def confirm_record(
 
 @router.get("", summary="OCR 记录列表")
 async def list_records(
-    status: OcrStatus | None = Query(None, description="按状态筛选"),
+    status: str | None = Query(None, description="按状态筛选 (pending/success/failed/confirmed)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),

@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
@@ -200,6 +200,7 @@ function onSaved() {
 }
 
 onMounted(loadList)
+onActivated(loadList)
 </script>
 
 <style scoped>

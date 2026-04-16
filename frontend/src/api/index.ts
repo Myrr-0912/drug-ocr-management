@@ -52,6 +52,12 @@ request.interceptors.response.use(
 
     // 401 处理：先尝试用 refresh_token 续期，失败再跳登录
     if (status === 401 && !config._retry) {
+      // 未登录状态（无 refresh token，如登录页）：直接显示后端错误提示，不触发 refresh 流程
+      if (!sessionStorage.getItem('refresh_token')) {
+        ElMessage.error(message || '认证失败')
+        return Promise.reject(error)
+      }
+
       // 若已有 refresh 进行中，将本请求排队，等 refresh 完成后统一重试
       if (isRefreshing) {
         return new Promise((resolve) => {

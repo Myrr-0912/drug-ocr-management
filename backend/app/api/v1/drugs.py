@@ -18,7 +18,7 @@ async def list_drugs(
     manufacturer: str | None = Query(None, description="按厂家筛选"),
     category: str | None = Query(None, description="按分类筛选"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: User = RequireLogin,
 ):

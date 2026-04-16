@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedError, ConflictError, BusinessError
@@ -53,17 +53,31 @@ async def login(db: AsyncSession, data: LoginRequest, request: Request) -> Token
             f"账号已因连续失败登录被锁定，请 {_settings().login_lockout_minutes} 分钟后重试"
         )
 
-    result = await db.execute(select(User).where(User.username == data.username))
+    # 支持用户名或邮箱登录
+    result = await db.execute(
+        select(User).where(
+            or_(User.username == data.username, User.email == data.username)
+        )
+    )
     user = result.scalar_one_or_none()
 
-    # 密码校验失败
-    if not user or not verify_password(data.password, user.password_hash):
+    # 账号不存在
+    if not user:
         await login_throttle.record_failure(data.username, ip)
         await audit_service.log_login(
             db, request=request, username=data.username,
-            success=False, failure_reason="用户名或密码错误"
+            success=False, failure_reason="账号未注册"
         )
-        raise UnauthorizedError("用户名或密码错误")
+        raise UnauthorizedError("该账号未注册，请先注册")
+
+    # 密码错误
+    if not verify_password(data.password, user.password_hash):
+        await login_throttle.record_failure(data.username, ip)
+        await audit_service.log_login(
+            db, request=request, username=data.username,
+            success=False, user=user, failure_reason="密码错误"
+        )
+        raise UnauthorizedError("密码错误，请重新输入")
 
     # 账号被禁用
     if not user.is_active:

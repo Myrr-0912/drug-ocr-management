@@ -329,10 +329,12 @@ import { UploadFilled, RefreshRight, DocumentChecked } from '@element-plus/icons
 import type { FormInstance, FormRules } from 'element-plus'
 
 import { useOcrStore } from '@/stores/ocr'
+import { useAuthStore } from '@/stores/auth'
 import type { OcrStatus, OcrConfirmRequest } from '@/types/ocr'
 import { OCR_STATUS_MAP } from '@/types/ocr'
 
 const ocrStore = useOcrStore()
+const authStore = useAuthStore()
 const statusMap = OCR_STATUS_MAP
 
 // --- 上传区状态 ---

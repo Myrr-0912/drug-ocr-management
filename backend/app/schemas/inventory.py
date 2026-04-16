@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, field_validator
 
 from app.models.inventory import OperationType
@@ -72,3 +74,11 @@ class InventoryListQuery(BaseModel):
     operation_type: OperationType | None = None
     page: int = 1
     page_size: int = 20
+
+    @field_validator("operation_type", mode="before")
+    @classmethod
+    def normalize_operation_type(cls, v: Any) -> Any:
+        """将操作类型字符串统一转为小写（与 DB 存储一致），防止大小写混用导致 422"""
+        if isinstance(v, str):
+            return v.lower()
+        return v

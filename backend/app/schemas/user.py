@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from pydantic import BaseModel, EmailStr, field_validator
 from app.models.user import UserRole
 
@@ -12,6 +13,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    email: EmailStr  # 注册时邮箱必填，覆盖父类的 Optional
 
     @field_validator("password")
     @classmethod
@@ -32,6 +34,14 @@ class UserAdminUpdate(BaseModel):
     role: UserRole | None = None
     is_active: bool | None = None
     real_name: str | None = None
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, v: Any) -> Any:
+        """将角色字符串统一转为小写，防止大小写混用"""
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 class UserResponse(UserBase):

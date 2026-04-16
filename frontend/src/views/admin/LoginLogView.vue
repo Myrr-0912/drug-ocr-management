@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { listLoginLogs, type LoginLog } from '@/api/admin'
 
 const loading = ref(false)
@@ -59,6 +59,7 @@ function shortUA(ua: string | null): string {
 }
 
 onMounted(fetchLogs)
+onActivated(fetchLogs)
 </script>
 
 <template>

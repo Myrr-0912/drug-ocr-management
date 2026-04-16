@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireLogin, RequirePharmacist, get_current_user
 from app.database import get_db, AsyncSessionLocal
-from app.models.alert import AlertType, AlertSeverity
 from app.models.user import User
+from app.schemas.alert import AlertListQuery
 from app.schemas.common import ok
 from app.services import alert_service
 
@@ -24,8 +24,8 @@ async def get_alert_stats(
 
 @router.get("", summary="获取预警列表")
 async def list_alerts(
-    alert_type: AlertType | None = Query(None, description="预警类型"),
-    severity: AlertSeverity | None = Query(None, description="严重程度"),
+    alert_type: str | None = Query(None, description="预警类型 (expiry_warning/expired/low_stock)"),
+    severity: str | None = Query(None, description="严重程度 (info/warning/critical)"),
     is_read: bool | None = Query(None, description="是否已读"),
     is_resolved: bool | None = Query(None, description="是否已解决"),
     page: int = Query(1, ge=1),
@@ -34,14 +34,23 @@ async def list_alerts(
     _: User = RequireLogin,
 ):
     """分页查询预警，支持多维度筛选"""
-    total, unread_count, items = await alert_service.get_alerts(
-        db,
+    # 通过 AlertListQuery 规范化枚举大小写，再解包传递给 service
+    q = AlertListQuery(
         alert_type=alert_type,
         severity=severity,
         is_read=is_read,
         is_resolved=is_resolved,
         page=page,
         page_size=page_size,
+    )
+    total, unread_count, items = await alert_service.get_alerts(
+        db,
+        alert_type=q.alert_type,
+        severity=q.severity,
+        is_read=q.is_read,
+        is_resolved=q.is_resolved,
+        page=q.page,
+        page_size=q.page_size,
     )
     return ok({
         "total": total,

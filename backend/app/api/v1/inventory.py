@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireLogin, RequirePharmacist, RequireAdmin
 from app.database import get_db
-from app.models.inventory import OperationType
 from app.models.user import User
 from app.schemas.common import ok
 from app.schemas.inventory import AdjustRequest, StockInRequest, StockOutRequest, InventoryListQuery
@@ -17,7 +16,7 @@ router = APIRouter(prefix="/inventory", tags=["库存管理"])
 async def list_records(
     drug_id: int | None = Query(None, description="按药品过滤"),
     batch_id: int | None = Query(None, description="按批次过滤"),
-    operation_type: OperationType | None = Query(None, description="按操作类型过滤"),
+    operation_type: str | None = Query(None, description="按操作类型过滤 (IN/OUT/ADJUST)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),

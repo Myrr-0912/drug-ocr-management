@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useAlertsStore } from '@/stores/alerts'
 import { useAuthStore } from '@/stores/auth'
 import type { AlertType, AlertSeverity, AlertListQuery } from '@/types/alert'
@@ -36,9 +36,12 @@ const severityConfig: Record<AlertSeverity, { label: string; type: 'danger' | 'w
 }
 
 /* ── 生命周期 ── */
-onMounted(async () => {
+async function loadInitial() {
   await Promise.all([alertsStore.loadAlerts(query.value), alertsStore.loadStats()])
-})
+}
+
+onMounted(loadInitial)
+onActivated(loadInitial)
 
 /* ── 操作 ── */
 async function handleScan() {

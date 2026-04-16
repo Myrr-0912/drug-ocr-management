@@ -191,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
@@ -329,6 +329,11 @@ async function handleDelete(id: number) {
 onMounted(() => {
   loadList()
   loadDrugOptions()
+})
+
+// keep-alive 激活时重新拉取列表（从其他页面切换回来时更新数据）
+onActivated(() => {
+  loadList()
 })
 </script>
 

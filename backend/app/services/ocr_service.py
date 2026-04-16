@@ -15,6 +15,7 @@ from app.core.exceptions import NotFoundError, BusinessError
 from app.models.ocr_record import OcrRecord, OcrStatus
 from app.models.drug import Drug
 from app.models.batch import DrugBatch, BatchStatus
+from app.models.inventory import InventoryRecord, OperationType
 from app.ocr.alibaba_client import recognize_image
 from app.ocr.text_parser import parse_drug_info
 from app.schemas.common import PageResponse
@@ -178,7 +179,19 @@ async def confirm_record(
     await db.flush()
     await db.refresh(batch)
 
-    # 5. 更新 OCR 记录为已确认
+    # 5. OCR 入库时，若数量 > 0 则同步写入库存流水（IN 类型）
+    if data.quantity > 0:
+        inv_record = InventoryRecord(
+            drug_id=drug.id,
+            batch_id=batch.id,
+            operation_type=OperationType.IN,
+            quantity=data.quantity,
+            operator_id=operator_id,
+            remark=f"OCR 识别入库（记录 #{record.id}）",
+        )
+        db.add(inv_record)
+
+    # 6. 更新 OCR 记录为已确认
     record.status = OcrStatus.confirmed
     record.drug_id = drug.id
     record.batch_id = batch.id

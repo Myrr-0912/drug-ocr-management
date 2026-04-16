@@ -1,10 +1,11 @@
 from datetime import date
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError, ConflictError, BusinessError
 from app.models.batch import DrugBatch, BatchStatus
 from app.models.drug import Drug
+from app.models.inventory import InventoryRecord
 from app.schemas.batch import BatchCreate, BatchUpdate, BatchListQuery, BatchResponse
 from app.schemas.common import PageResponse
 
@@ -109,10 +110,13 @@ async def update_batch(db: AsyncSession, batch_id: int, data: BatchUpdate) -> Ba
 
 
 async def delete_batch(db: AsyncSession, batch_id: int) -> None:
-    """删除批次（仅允许库存为 0 的批次）"""
+    """删除批次（仅允许库存为 0 的批次，同时级联清除关联流水记录）"""
     batch, _ = await get_batch(db, batch_id)
     if batch.quantity != 0:
         raise BusinessError(f"批次库存量为 {batch.quantity}，不能删除非零库存批次")
+
+    # 先删关联流水记录，绕过外键 RESTRICT 约束（批次删除后流水无意义）
+    await db.execute(delete(InventoryRecord).where(InventoryRecord.batch_id == batch_id))
     await db.delete(batch)
     await db.flush()
 

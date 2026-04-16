@@ -109,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted } from 'vue'
+import { reactive, onMounted, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -154,6 +154,7 @@ async function handleDelete(id: number) {
 }
 
 onMounted(loadRecords)
+onActivated(loadRecords)
 </script>
 
 <style scoped>

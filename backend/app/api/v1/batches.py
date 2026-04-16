@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireLogin, RequirePharmacist
 from app.database import get_db
-from app.models.batch import BatchStatus
 from app.models.user import User
 from app.schemas.batch import BatchCreate, BatchUpdate, BatchListQuery
 from app.schemas.common import ok
@@ -16,7 +15,7 @@ router = APIRouter(prefix="/batches", tags=["批次管理"])
 @router.get("", summary="获取批次列表")
 async def list_batches(
     drug_id: int | None = Query(None, description="按药品 ID 过滤"),
-    status: BatchStatus | None = Query(None, description="按状态过滤"),
+    status: str | None = Query(None, description="按状态过滤 (normal/near_expiry/expired)"),
     keyword: str | None = Query(None, description="批号关键词"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

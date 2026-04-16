@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 from pydantic import BaseModel, field_validator
 
 from app.models.ocr_record import OcrStatus
@@ -75,3 +76,11 @@ class OcrListQuery(BaseModel):
     status: OcrStatus | None = None
     page: int = 1
     page_size: int = 20
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v: Any) -> Any:
+        """将状态字符串统一转为小写，防止大小写混用导致 422"""
+        if isinstance(v, str):
+            return v.lower()
+        return v

@@ -1,5 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel
+from typing import Any
+from pydantic import BaseModel, field_validator
 from app.models.alert import AlertType, AlertSeverity
 
 
@@ -26,6 +27,24 @@ class AlertListResponse(BaseModel):
     total: int
     unread_count: int
     items: list[AlertOut]
+
+
+class AlertListQuery(BaseModel):
+    """预警列表查询参数"""
+    alert_type: AlertType | None = None
+    severity: AlertSeverity | None = None
+    is_read: bool | None = None
+    is_resolved: bool | None = None
+    page: int = 1
+    page_size: int = 20
+
+    @field_validator("alert_type", "severity", mode="before")
+    @classmethod
+    def normalize_enum(cls, v: Any) -> Any:
+        """将枚举字符串统一转为小写，防止大小写混用导致 422"""
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 class AlertStats(BaseModel):
