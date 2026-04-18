@@ -18,6 +18,10 @@ htmlcov/
 # 环境变量（含密钥，禁止提交）
 .env
 .env.local
+.env.production
+
+# Docker Compose 数据卷（MySQL/Redis 持久化 + 上传目录 + Let's Encrypt 证书）
+volumes/
 
 # 上传文件
 backend/uploads/*

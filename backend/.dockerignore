@@ -1,0 +1,32 @@
+# 排除开发环境本地文件，避免污染镜像
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# 敏感与本地配置
+.env
+.env.local
+
+# 上传文件将通过 volume 挂载，镜像内不保留历史数据
+uploads/*
+!uploads/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 本地脚本与笔记
+tests/.pytest_cache/
