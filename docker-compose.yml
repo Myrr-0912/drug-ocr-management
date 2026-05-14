@@ -1,8 +1,15 @@
 # 生产环境编排：mysql + redis + backend + frontend + nginx
-# 本地冒烟：cp .env.production.example .env.production && docker compose up -d --build
+#
+# 启动（务必加 --env-file，否则 ${VAR} 插值会读取默认 .env 而非 .env.production）：
+#   cp .env.production.example .env.production
+#   docker compose --env-file .env.production up -d --build
+#
+# 停止 / 重建：
+#   docker compose --env-file .env.production down
+#   docker compose --env-file .env.production up -d --force-recreate
 #
 # 端口策略：
-#   - 仅入口 nginx 暴露到宿主机（HTTP 80 / HTTPS 443）
+#   - 仅入口 nginx 暴露到宿主机（HTTP 18080 / HTTPS 18443）
 #   - backend/frontend/mysql/redis 仅在 compose 内网可达
 
 services:
@@ -88,8 +95,8 @@ services:
     image: nginx:alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "18080:80"
+      - "18443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./volumes/backend-uploads:/var/www/uploads:ro

@@ -2,15 +2,27 @@
 # =============== Stage 1: builder ===============
 FROM python:3.12-slim AS builder
 
+ARG APT_MIRROR=https://mirrors.aliyun.com/debian
+
+# 国内构建默认走阿里云 PyPI 镜像，规避 PyPI 官方源跨境不稳定导致的
+# "Could not find a version" 问题。
+# CI / 海外构建需官方源时：
+#   docker compose build --build-arg PIP_INDEX_URL=https://pypi.org/simple backend
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=5
 
 WORKDIR /build
 
 # 编译工具仅存在于 builder 阶段
-RUN apt-get update \
+RUN sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g; s|http://security.debian.org/debian-security|${APT_MIRROR}-security|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=120 update \
     && apt-get install -y --no-install-recommends build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +35,8 @@ RUN pip install --prefix=/install -r requirements.txt
 # =============== Stage 2: runtime ===============
 FROM python:3.12-slim AS runtime
 
+ARG APT_MIRROR=https://mirrors.aliyun.com/debian
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai
@@ -31,7 +45,8 @@ WORKDIR /app
 
 # libmagic 预留给 WS3 文件头校验；tzdata 设置时区；gosu 供 entrypoint 降权
 # 健康检查改用 Python stdlib，省去 curl 依赖 + 减小镜像体积
-RUN apt-get update \
+RUN sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g; s|http://security.debian.org/debian-security|${APT_MIRROR}-security|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=120 update \
     && apt-get install -y --no-install-recommends libmagic1 tzdata gosu \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && rm -rf /var/lib/apt/lists/*

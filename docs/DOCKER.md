@@ -7,7 +7,7 @@
 - Docker Desktop ≥ 24.x（Windows/macOS）或 Docker Engine ≥ 24.x（Linux）
 - Docker Compose v2
 - 空闲磁盘 ≥ 5GB（镜像 + MySQL 初始数据）
-- 端口 80、443 未被占用
+- 端口 18080、18443 未被占用
 
 ## 准备环境变量
 
@@ -51,8 +51,8 @@ docker compose --env-file .env.production down -v
 启动后依次验证：
 
 1. **容器状态**：`docker compose ps` 全部 `running (healthy)`
-2. **后端健康**：浏览器访问 `http://localhost/health` 返回 `{"status":"ok"}`
-3. **前端登录**：浏览器打开 `http://localhost`，用 `.env.production` 中的 `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` 登录
+2. **后端健康**：浏览器访问 `http://localhost:18080/health` 返回 `{"status":"ok"}`
+3. **前端登录**：浏览器打开 `http://localhost:18080`，用 `.env.production` 中的 `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` 登录
 4. **OCR 流程**：上传药品图片 → 识别 → 确认入库
 5. **预警扫描**：登录后访问预警中心，或重启后观察 APScheduler 日志
 
@@ -64,7 +64,7 @@ docker compose --env-file .env.production down -v
 
 ### 端口冲突
 
-`Error: port 80 already in use` —— Windows 上通常是 IIS 或 Skype 占用，也可以修改 `docker-compose.yml` 里 `nginx` 服务的端口映射为 `"8080:80"`。
+`Error: port 18080 already in use` —— 可以修改 `docker-compose.yml` 里 `nginx` 服务的端口映射，例如 `"18081:80"`。
 
 ### MySQL 首次启动慢
 
