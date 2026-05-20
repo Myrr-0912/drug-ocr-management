@@ -38,9 +38,12 @@
 
 ## 🚀 快速开始
 
-推荐使用 **Docker 一键部署**；若需脱离容器做本地开发调试，见下方「💻 本地开发」一节。
+项目提供两条启动路线：
 
-### 🐳 Docker 一键部署（推荐）
+- **Docker 部署**：一条命令拉起 MySQL、Redis、后端、前端和 Nginx，适合完整部署或本地冒烟。
+- **本地开发**：Docker 只启动 Redis，本机 MySQL + 本机后端 + 本机前端，适合热更新调试。
+
+### 路线一：Docker 部署
 
 一条命令拉起前后端全栈（MySQL + Redis + FastAPI 后端 + Vue 前端 + Nginx 反代），宿主机无需安装 Python / Node / 数据库。
 
@@ -49,7 +52,7 @@
 - Docker Desktop ≥ 24（Windows / macOS）或 Docker Engine ≥ 24（Linux），含 Docker Compose v2
 - 宿主机端口 `18080`、`18443` 空闲
 
-**部署步骤**
+**启动命令**
 
 ```bash
 # 1. 准备环境变量：复制模板后编辑，至少填写所有 REPLACE_* 项（密钥 / 密码）
@@ -77,9 +80,9 @@ docker compose up -d --build    # 修改代码后重建并重启
 
 ---
 
-### 💻 本地开发
+### 路线二：本地开发
 
-> 以下为**不使用 Docker** 的本地调试流程，环境变量写在 `backend/.env`（与 Docker 部署使用的根目录 `.env` 相互独立、互不影响）。
+这条路线只用 Docker 启动 Redis，MySQL、后端和前端都在宿主机运行。环境变量写在 `backend/.env`（与 Docker 部署使用的根目录 `.env` 相互独立、互不影响）。
 
 #### 环境要求
 
@@ -87,33 +90,22 @@ docker compose up -d --build    # 修改代码后重建并重启
 |------|------|------|
 | Python | 3.12+ | 运行后端 |
 | Node.js | 18+ | 运行前端 |
-| MySQL | 8.0 | 主数据库 |
-| Redis | 6+ | Token 管理 + 登录限流 |
-| Docker | 20+ | 运行 Redis 容器（推荐） |
+| MySQL | 8.0 | 本机主数据库 |
+| Docker | 20+ | 启动 Redis 容器 |
 
-#### 启动 Redis
+#### 首次准备
 
-推荐使用 Docker 运行 Redis（需确保 Docker Desktop 已启动）：
-
-```bash
-docker run -d --name redis -p 6379:6379 --restart always redis:7-alpine
-```
-
-> `--restart always` 使 Redis 随 Docker Desktop 自动启动，后续无需手动操作。
-> 
-> 首次运行验证：`docker exec redis redis-cli ping`，返回 `PONG` 即正常。
-
-先在 MySQL 中建库：
+1. 启动本机 MySQL，并创建数据库：
 
 ```sql
 CREATE DATABASE drug_ocr_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-#### 启动后端
+2. 准备后端虚拟环境和配置：
 
 ```bash
 cd backend
-python -m venv venv         # 创建虚拟环境（三系统一致）
+python -m venv venv
 ```
 
 **激活虚拟环境** —— 按操作系统二选一：
@@ -125,23 +117,50 @@ python -m venv venv         # 创建虚拟环境（三系统一致）
 
 > Windows 首次激活若提示「禁止运行脚本」，先执行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 放行后重试。
 
-激活虚拟环境后，以下步骤三系统一致：
+激活虚拟环境后安装依赖并初始化数据库：
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env        # 编辑 .env，填写必填项（见下方环境变量说明）
-alembic upgrade head        # 初始化数据库表结构
-uvicorn app.main:app --reload
-# API 文档：http://localhost:8000/docs
+cp .env.example .env        # 编辑 .env，填写本机 MySQL、JWT、OCR 等配置
+alembic upgrade head
 ```
 
-#### 启动前端
+3. 准备前端依赖：
 
 ```bash
-cd frontend
+cd ../frontend
 npm install
-npm run dev
-# 访问 http://localhost:5173
+```
+
+#### 日常启动
+
+如需热更新开发，分别在三个终端启动 Redis、后端和前端：
+
+```bash
+# 1. Redis（在项目根目录执行，复用唯一的 docker-compose.yml）
+docker compose up -d redis
+
+# 2. 后端（端口 8000）
+cd backend && uvicorn app.main:app --reload
+
+# 3. 前端（Vite 热更新，已代理 /api 和 /uploads 到 localhost:8000）
+cd frontend && npm run dev
+```
+
+访问地址：
+
+| 服务 | 地址 |
+|------|------|
+| 前端应用 | http://localhost:5173 |
+| 后端 API | http://localhost:8000 |
+| Swagger 文档 | http://localhost:8000/docs |
+
+常用命令：
+
+```bash
+docker compose ps redis
+docker compose logs -f redis
+docker compose down
 ```
 
 #### 环境变量说明
@@ -153,6 +172,7 @@ npm run dev
 | `ALIYUN_OCR_ACCESS_KEY_ID` | 阿里云 RAM AccessKey ID | ✅ |
 | `ALIYUN_OCR_ACCESS_KEY_SECRET` | 阿里云 RAM AccessKey Secret | ✅ |
 | `REDIS_HOST` | Redis 地址，默认 `localhost` | — |
+| `REDIS_PASSWORD` | 本地开发 Redis 密码；如根目录 `.env` 配了 `REDIS_PASSWORD`，这里需保持一致，否则留空 | — |
 | `SMTP_USER` / `SMTP_PASSWORD` | 阿里云 SMTP 账号（忘记密码功能） | — |
 | `INITIAL_ADMIN_PASSWORD` | 首次启动创建的 admin 密码，默认 `Admin@2026!` | — |
 | `EXPIRY_WARNING_DAYS` | 临期预警提前天数，默认 `30` | — |
