@@ -1,12 +1,12 @@
-# 生产环境编排：mysql + redis + backend + frontend + nginx
+# 生产环境编排：mysql + redis + backend + frontend + nginx（前后端一键部署）
 #
-# 启动（务必加 --env-file，否则 ${VAR} 插值会读取默认 .env 而非 .env.production）：
-#   cp .env.production.example .env.production
-#   docker compose --env-file .env.production up -d --build
+# 一键启动（Compose 自动加载根目录 .env，无需任何额外参数）：
+#   cp .env.example .env        # 首次：复制模板并填写 REPLACE_* 项
+#   docker compose up -d --build
 #
 # 停止 / 重建：
-#   docker compose --env-file .env.production down
-#   docker compose --env-file .env.production up -d --force-recreate
+#   docker compose down
+#   docker compose up -d --force-recreate
 #
 # 端口策略：
 #   - 仅入口 nginx 暴露到宿主机（HTTP 18080 / HTTPS 18443）
@@ -66,7 +66,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - .env.production
+      - .env
     environment:
       # 容器内连接名按服务名路由，覆盖 .env 中的 localhost
       DB_HOST: mysql

@@ -12,10 +12,10 @@
 ## 准备环境变量
 
 ```bash
-cp .env.production.example .env.production
+cp .env.example .env
 ```
 
-编辑 `.env.production`，**必须**修改以下项：
+编辑 `.env`，**必须**修改以下项：
 
 | 变量 | 生成方式 |
 |------|---------|
@@ -29,21 +29,23 @@ cp .env.production.example .env.production
 
 ## 启动
 
+> Docker Compose 会自动加载项目根目录的 `.env`，无需 `--env-file` 等额外参数。
+
 ```bash
 # 首次启动（构建镜像）
-docker compose --env-file .env.production up -d --build
+docker compose up -d --build
 
 # 后续启动（复用已构建镜像）
-docker compose --env-file .env.production up -d
+docker compose up -d
 
 # 查看日志
 docker compose logs -f backend
 
 # 停止
-docker compose --env-file .env.production down
+docker compose down
 
 # 完全清理（含数据卷 —— 慎用）
-docker compose --env-file .env.production down -v
+docker compose down -v
 ```
 
 ## 验证
@@ -52,7 +54,7 @@ docker compose --env-file .env.production down -v
 
 1. **容器状态**：`docker compose ps` 全部 `running (healthy)`
 2. **后端健康**：浏览器访问 `http://localhost:18080/health` 返回 `{"status":"ok"}`
-3. **前端登录**：浏览器打开 `http://localhost:18080`，用 `.env.production` 中的 `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` 登录
+3. **前端登录**：浏览器打开 `http://localhost:18080`，用 `.env` 中的 `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` 登录
 4. **OCR 流程**：上传药品图片 → 识别 → 确认入库
 5. **预警扫描**：登录后访问预警中心，或重启后观察 APScheduler 日志
 
@@ -73,8 +75,8 @@ MySQL 容器首次启动需创建系统表，耗时 20-40 秒，`healthcheck` �
 ### 重新构建某个服务
 
 ```bash
-docker compose --env-file .env.production build backend
-docker compose --env-file .env.production up -d backend
+docker compose build backend
+docker compose up -d backend
 ```
 
 ## 数据持久化

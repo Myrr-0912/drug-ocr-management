@@ -38,7 +38,50 @@
 
 ## 🚀 快速开始
 
-### 环境要求
+推荐使用 **Docker 一键部署**；若需脱离容器做本地开发调试，见下方「💻 本地开发」一节。
+
+### 🐳 Docker 一键部署（推荐）
+
+一条命令拉起前后端全栈（MySQL + Redis + FastAPI 后端 + Vue 前端 + Nginx 反代），宿主机无需安装 Python / Node / 数据库。
+
+**前置条件**
+
+- Docker Desktop ≥ 24（Windows / macOS）或 Docker Engine ≥ 24（Linux），含 Docker Compose v2
+- 宿主机端口 `18080`、`18443` 空闲
+
+**部署步骤**
+
+```bash
+# 1. 准备环境变量：复制模板后编辑，至少填写所有 REPLACE_* 项（密钥 / 密码）
+cp .env.example .env
+
+# 2. 一键启动（首次会构建镜像，耗时数分钟）
+docker compose up -d --build
+
+# 3. 浏览器访问 http://localhost:18080
+```
+
+启动完成后，用 `.env` 中的 `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` 登录。
+
+**常用命令**
+
+```bash
+docker compose ps               # 查看容器状态（应全部 healthy）
+docker compose logs -f backend  # 跟踪后端日志
+docker compose down             # 停止全部服务
+docker compose up -d --build    # 修改代码后重建并重启
+```
+
+> Compose 会自动加载项目根目录的 `.env`，无需 `--env-file` 等额外参数。
+> `.env` 各项含义与必填项见模板文件 `.env.example`；完整部署与排错说明见 [docs/DOCKER.md](docs/DOCKER.md)。
+
+---
+
+### 💻 本地开发
+
+> 以下为**不使用 Docker** 的本地调试流程，环境变量写在 `backend/.env`（与 Docker 部署使用的根目录 `.env` 相互独立、互不影响）。
+
+#### 环境要求
 
 | 服务 | 版本 | 用途 |
 |------|------|------|
@@ -48,7 +91,7 @@
 | Redis | 6+ | Token 管理 + 登录限流 |
 | Docker | 20+ | 运行 Redis 容器（推荐） |
 
-### 启动 Redis
+#### 启动 Redis
 
 推荐使用 Docker 运行 Redis（需确保 Docker Desktop 已启动）：
 
@@ -66,7 +109,7 @@ docker run -d --name redis -p 6379:6379 --restart always redis:7-alpine
 CREATE DATABASE drug_ocr_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 启动后端
+#### 启动后端
 
 ```bash
 cd backend
@@ -77,7 +120,7 @@ uvicorn app.main:app --reload
 # API 文档：http://localhost:8000/docs
 ```
 
-### 启动前端
+#### 启动前端
 
 ```bash
 cd frontend
@@ -86,7 +129,7 @@ npm run dev
 # 访问 http://localhost:5173
 ```
 
-### 环境变量说明
+#### 环境变量说明
 
 | 变量 | 说明 | 必填 |
 |------|------|------|
