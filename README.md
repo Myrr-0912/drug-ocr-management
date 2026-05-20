@@ -113,6 +113,21 @@ CREATE DATABASE drug_ocr_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 ```bash
 cd backend
+python -m venv venv         # 创建虚拟环境（三系统一致）
+```
+
+**激活虚拟环境** —— 按操作系统二选一：
+
+| 系统 | 激活命令 |
+|------|---------|
+| Windows（PowerShell） | `.\venv\Scripts\Activate.ps1` |
+| macOS / Linux | `source venv/bin/activate` |
+
+> Windows 首次激活若提示「禁止运行脚本」，先执行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 放行后重试。
+
+激活虚拟环境后，以下步骤三系统一致：
+
+```bash
 pip install -r requirements.txt
 cp .env.example .env        # 编辑 .env，填写必填项（见下方环境变量说明）
 alembic upgrade head        # 初始化数据库表结构
