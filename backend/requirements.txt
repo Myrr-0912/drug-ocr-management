@@ -6,6 +6,10 @@ python-multipart==0.0.17
 # ===== 数据库 =====
 sqlalchemy==2.0.36
 aiomysql==0.2.0
+# 锁定 PyMySQL：1.2.0 把 Connection.ping 默认值由 True 改为 False，
+# 会让 SQLAlchemy 2.0.36 的 aiomysql 适配器在 pool_pre_ping 时报
+# "ping() missing 1 required positional argument: 'reconnect'"
+pymysql==1.1.1
 alembic==1.14.0
 
 # ===== 配置管理 =====
