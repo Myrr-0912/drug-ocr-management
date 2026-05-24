@@ -105,15 +105,15 @@ CREATE DATABASE drug_ocr_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 ```bash
 cd backend
-python -m venv venv
+python -m venv .venv
 ```
 
 **激活虚拟环境** —— 按操作系统二选一：
 
 | 系统 | 激活命令 |
 |------|---------|
-| Windows（PowerShell） | `.\venv\Scripts\Activate.ps1` |
-| macOS / Linux | `source venv/bin/activate` |
+| Windows（PowerShell） | `.\.venv\Scripts\Activate.ps1` |
+| macOS / Linux | `source .venv/bin/activate` |
 
 > Windows 首次激活若提示「禁止运行脚本」，先执行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 放行后重试。
 
@@ -136,16 +136,20 @@ npm install
 
 如需热更新开发，分别在三个终端启动 Redis、后端和前端：
 
-```bash
+```powershell
 # 1. Redis（在项目根目录执行，复用唯一的 docker-compose.yml）
 docker compose up -d redis
 
-# 2. 后端（端口 8000）
-cd backend && uvicorn app.main:app --reload
+# 2. 后端（端口 8000；使用项目虚拟环境，避免调用全局 uvicorn）
+cd backend
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 
 # 3. 前端（Vite 热更新，已代理 /api 和 /uploads 到 localhost:8000）
-cd frontend && npm run dev
+cd frontend
+npm run dev
 ```
+
+> 后端必须通过虚拟环境里的 Python 启动；如果直接运行全局 `uvicorn`，可能会找不到 `cv2` 等已安装在项目虚拟环境中的依赖。
 
 访问地址：
 
