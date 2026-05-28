@@ -1,21 +1,18 @@
 """
-药品信息文本解析器 — 多级兜底策略 Pipeline
+药品信息文本解析器 — 正则兜底（Tier 1 + Tier 2）
 
 执行层级：
   Tier 1 — 增强型正则提取（中文关键词间加 \\s* 兼容排版空格）
   Tier 2 — difflib 模糊匹配兜底（正则失败时启动，相似度阈值 > 0.8）
-  Tier 3 — DeepSeek LLM 兜底（核心字段均为空时触发，读取 DEEPSEEK_API_KEY）
 
-对外接口保持不变：parse_drug_info(raw_text: str) -> ExtractedDrugData
+主接口：parse_drug_info(raw_text: str) -> ExtractedDrugData
+本模块在 app.ocr.pipeline 中作为 qwen-vl-ocr 模型抽取的兜底安全网，
+对模型未给出的字段在高质量 raw_text 上做正则补全。
 """
 import re
-import json
-import os
 import difflib
 import logging
 from typing import Optional
-
-import httpx
 
 from app.schemas.ocr import ExtractedDrugData
 
@@ -101,74 +98,6 @@ _FUZZY_KEYWORDS: dict[str, list[str]] = {
 
 
 # ============================================================
-# Tier 3 — LLM 提取接口（当前为 Stub，未激活）
-# ============================================================
-
-# LLM 系统提示词：指导模型输出标准 JSON
-_LLM_SYSTEM_PROMPT = """你是一个专业的药品信息结构化提取助手。
-请从用户提供的药盒 OCR 原始文本中，严格按照以下 JSON 格式提取信息：
-{
-  "name": "药品通用名称（字符串或 null）",
-  "approval_number": "批准文号，格式为国药准字+字母+8位数字（字符串或 null）",
-  "manufacturer": "生产企业全称（字符串或 null）",
-  "specification": "规格，如 0.25g×12粒（字符串或 null）",
-  "batch_number": "批号，字母数字组合（字符串或 null）",
-  "production_date": "生产日期，格式 YYYY-MM-DD（字符串或 null）",
-  "expiry_date": "有效期至，格式 YYYY-MM-DD（字符串或 null）",
-  "quantity": "数量，仅整数（整数或 null）"
-}
-规则：
-- 无法确定的字段必须填写 null，禁止猜测或捏造。
-- 日期必须统一转换为 YYYY-MM-DD 格式。
-- 只输出 JSON，不要有任何其他说明文字。"""
-
-
-def _extract_via_llm(raw_text: str) -> Optional[dict]:
-    """
-    Tier 3 — DeepSeek LLM 兜底提取。
-    通过 httpx 同步调用 DeepSeek Chat API（OpenAI 兼容格式）。
-    API Key 从环境变量 DEEPSEEK_API_KEY 读取。
-    任何网络错误或解析异常均安全返回 None，不影响主流程。
-    """
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not api_key:
-        logger.warning("[Tier 3] 未配置 DEEPSEEK_API_KEY，跳过 LLM 提取")
-        return None
-
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [
-            {"role": "system", "content": _LLM_SYSTEM_PROMPT},
-            {"role": "user", "content": raw_text},
-        ],
-        "temperature": 0,       # 信息抽取任务关闭随机性，保证输出稳定
-        "max_tokens": 512,
-        "response_format": {"type": "json_object"},
-    }
-
-    try:
-        with httpx.Client(timeout=15) as client:
-            resp = client.post(
-                "https://api.deepseek.com/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        result = json.loads(content)
-        logger.info("[Tier 3] DeepSeek 提取成功：%s", result)
-        return result
-    except httpx.HTTPStatusError as e:
-        logger.error("[Tier 3] DeepSeek API 错误 %s：%s", e.response.status_code, e.response.text)
-    except Exception as e:
-        logger.error("[Tier 3] DeepSeek 提取异常：%s", e)
-    return None
-
-
-# ============================================================
 # 工具函数
 # ============================================================
 
@@ -237,7 +166,6 @@ def parse_drug_info(raw_text: str) -> ExtractedDrugData:
     多级兜底策略解析药品 OCR 原始文本：
       Tier 1 → 增强型正则提取
       Tier 2 → difflib 模糊匹配（仅对正则失败的字段启动）
-      Tier 3 → LLM 兜底（批号、有效期、名称均为空时触发）
     """
     text = raw_text or ""
     lines = text.splitlines()
@@ -380,30 +308,6 @@ def parse_drug_info(raw_text: str) -> ExtractedDrugData:
                     specification = val
                     logger.debug("[Tier 2] 规格模糊匹配成功：%s", specification)
                 break
-
-    # ── Tier 3: LLM 兜底（批号、有效期、名称三个核心字段均为空时触发）─
-
-    core_fields_empty = not batch_number and not expiry_date and not name
-    if core_fields_empty:
-        logger.info("[Tier 3] 核心字段均为空，尝试 LLM 提取")
-        llm_result = _extract_via_llm(text)
-        if llm_result:
-            name          = name          or llm_result.get("name")
-            approval      = approval      or llm_result.get("approval_number")
-            manufacturer  = manufacturer  or llm_result.get("manufacturer")
-            specification = specification or llm_result.get("specification")
-            batch_number  = batch_number  or llm_result.get("batch_number")
-            production_date = production_date or _normalize_date_str(
-                llm_result.get("production_date") or ""
-            )
-            expiry_date = expiry_date or _normalize_date_str(
-                llm_result.get("expiry_date") or ""
-            )
-            if quantity is None and llm_result.get("quantity") is not None:
-                try:
-                    quantity = int(llm_result["quantity"])
-                except (ValueError, TypeError):
-                    pass
 
     return ExtractedDrugData(
         name=name,

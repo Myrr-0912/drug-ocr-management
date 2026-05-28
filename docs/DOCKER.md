@@ -24,7 +24,7 @@ cp .env.example .env
 | `JWT_SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `REDIS_PASSWORD` | 任意强密码（可为空，但生产强烈建议设置） |
 | `INITIAL_ADMIN_PASSWORD` | 至少 8 位，含大小写 + 数字 + 符号 |
-| `ALIYUN_OCR_ACCESS_KEY_ID` / `ALIYUN_OCR_ACCESS_KEY_SECRET` | 阿里云 RAM 子账号 |
+| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key（qwen-vl-ocr） |
 | `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` / `FRONTEND_URL` | 阿里云邮件推送（可选） |
 
 ## 启动

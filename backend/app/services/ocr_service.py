@@ -12,12 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.exceptions import NotFoundError, BusinessError
+from app.database import AsyncSessionLocal
 from app.models.ocr_record import OcrRecord, OcrStatus
 from app.models.drug import Drug
 from app.models.batch import DrugBatch, BatchStatus
 from app.models.inventory import InventoryRecord, OperationType
-from app.ocr.alibaba_client import recognize_image
-from app.ocr.text_parser import parse_drug_info
+from app.ocr.pipeline import recognize_and_extract
 from app.schemas.common import PageResponse
 from app.schemas.ocr import (
     OcrRecordResponse,
@@ -46,6 +46,25 @@ async def upload_and_recognize(
     上传图片并调用 OCR 识别，将结果存入 ocr_records 表。
     整个流程：保存文件 → 创建记录(pending) → OCR 识别 → 更新记录(success/failed)
     """
+    record = await create_upload_record(
+        db=db,
+        image_bytes=image_bytes,
+        filename=filename,
+        content_type=content_type,
+        operator_id=operator_id,
+    )
+    await recognize_record(db=db, record=record, image_bytes=image_bytes)
+    return record
+
+
+async def create_upload_record(
+    db: AsyncSession,
+    image_bytes: bytes,
+    filename: str,
+    content_type: str,
+    operator_id: int,
+) -> OcrRecord:
+    """保存上传图片并创建 pending 记录，不等待模型识别完成。"""
     # 1. 文件类型校验
     if content_type not in _ALLOWED_CONTENT_TYPES:
         raise BusinessError(f"不支持的图片格式：{content_type}，请上传 JPG/PNG/BMP/WebP")
@@ -77,23 +96,24 @@ async def upload_and_recognize(
     db.add(record)
     await db.flush()
     await db.refresh(record)
+    return record
 
-    # 5. 调用 OCR（网络失败不抛出，而是将错误写入记录）
+
+async def recognize_record(
+    db: AsyncSession,
+    record: OcrRecord,
+    image_bytes: bytes,
+) -> OcrRecord:
+    """调用识别流水线并把结果写回 OCR 记录；失败只落库，不向外抛出。"""
     try:
-        ocr_result = await recognize_image(image_bytes)
-        raw_text = ocr_result.get("raw_text", "")
-        confidence = ocr_result.get("confidence", 0.0)
-        confidence_estimated = ocr_result.get("confidence_estimated", False)
+        result = await recognize_and_extract(image_bytes)
 
-        # 6. 解析结构化药品信息
-        extracted = parse_drug_info(raw_text)
+        extracted_dict = result.extracted.model_dump(exclude_none=True)
+        extracted_dict["confidence_estimated"] = True   # confidence 为字段完整度代理值
 
-        extracted_dict = extracted.model_dump(exclude_none=True)
-        extracted_dict["confidence_estimated"] = confidence_estimated  # 记录置信度来源
-
-        record.raw_text = raw_text
+        record.raw_text = result.raw_text
         record.extracted_data = extracted_dict
-        record.confidence = confidence
+        record.confidence = result.confidence
         record.status = OcrStatus.success
 
     except Exception as e:
@@ -104,6 +124,17 @@ async def upload_and_recognize(
     await db.flush()
     await db.refresh(record)
     return record
+
+
+async def recognize_record_background(record_id: int, image_bytes: bytes) -> None:
+    """后台识别任务入口：使用独立 DB session 更新已创建的 pending 记录。"""
+    async with AsyncSessionLocal() as db:
+        record = await db.get(OcrRecord, record_id)
+        if not record:
+            logger.warning("OCR 后台识别找不到记录 record_id=%s", record_id)
+            return
+        await recognize_record(db=db, record=record, image_bytes=image_bytes)
+        await db.commit()
 
 
 async def confirm_record(

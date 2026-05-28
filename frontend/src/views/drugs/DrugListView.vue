@@ -53,13 +53,32 @@
 
     <!-- 表格 -->
     <div class="card table-card">
+      <div v-if="authStore.isPharmacist" class="batch-toolbar">
+        <span class="selection-count">已选 {{ selectedDrugs.length }} 项</span>
+        <el-button
+          type="danger"
+          plain
+          :disabled="selectedDrugs.length === 0"
+          :loading="batchDeleting"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </el-button>
+      </div>
       <el-table
         v-loading="drugsStore.loading"
         :data="drugsStore.list"
         stripe
         style="width: 100%"
         row-class-name="table-row"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column
+          v-if="authStore.isPharmacist"
+          type="selection"
+          width="48"
+          fixed="left"
+        />
         <el-table-column prop="name" label="药品名称" min-width="160">
           <template #default="{ row }">
             <span class="drug-name">{{ row.name }}</span>
@@ -131,7 +150,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDrugsStore } from '@/stores/drugs'
@@ -154,6 +173,8 @@ const query = reactive({
 
 const dialogVisible = ref(false)
 const editingDrug = ref<Drug | null>(null)
+const selectedDrugs = ref<Drug[]>([])
+const batchDeleting = ref(false)
 
 /** 防抖定时器 */
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -185,12 +206,60 @@ function openDialog(drug: Drug | null = null) {
   dialogVisible.value = true
 }
 
+function handleSelectionChange(rows: Drug[]) {
+  selectedDrugs.value = rows
+}
+
 async function handleDelete(id: number) {
   try {
     await drugsStore.remove(id)
     ElMessage.success('删除成功')
   } catch {
     // 错误已由 axios 拦截器处理
+  }
+}
+
+async function handleBatchDelete() {
+  if (selectedDrugs.value.length === 0) {
+    ElMessage.warning('请先选择要删除的药品')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${selectedDrugs.value.length} 个药品？有关联批次的药品会删除失败。`,
+      '批量删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  batchDeleting.value = true
+  let success = 0
+  let failed = 0
+  try {
+    for (const drug of selectedDrugs.value) {
+      try {
+        await drugsStore.remove(drug.id)
+        success += 1
+      } catch {
+        failed += 1
+      }
+    }
+    selectedDrugs.value = []
+    await loadList()
+    if (failed > 0) {
+      ElMessage.warning(`已删除 ${success} 个药品，${failed} 个删除失败`)
+    } else {
+      ElMessage.success(`已批量删除 ${success} 个药品`)
+    }
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -253,7 +322,24 @@ onActivated(loadList)
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
+  padding: 0;
   overflow: hidden;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.selection-count {
+  font-size: 13px;
+  color: #6b7280;
 }
 
 :deep(.table-row) {

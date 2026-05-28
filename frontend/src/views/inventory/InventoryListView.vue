@@ -36,12 +36,31 @@
 
     <!-- 表格 -->
     <div class="card table-card">
+      <div v-if="authStore.isAdmin" class="batch-toolbar">
+        <span class="selection-count">已选 {{ selectedRecords.length }} 项</span>
+        <el-button
+          type="danger"
+          plain
+          :disabled="selectedRecords.length === 0"
+          :loading="batchDeleting"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </el-button>
+      </div>
       <el-table
         v-loading="inventoryStore.loading"
         :data="inventoryStore.records"
         stripe
         style="width: 100%"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column
+          v-if="authStore.isAdmin"
+          type="selection"
+          width="48"
+          fixed="left"
+        />
         <el-table-column prop="drug_name" label="药品名称" min-width="150" show-overflow-tooltip />
         <el-table-column prop="batch_number" label="批号" min-width="130" />
         <el-table-column prop="operation_type" label="操作类型" width="110">
@@ -109,12 +128,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, onActivated } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted, onActivated } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInventoryStore } from '@/stores/inventory'
-import { OPERATION_TYPE_LABEL, OPERATION_TYPE_TAG, type OperationType } from '@/types/inventory'
+import { OPERATION_TYPE_LABEL, OPERATION_TYPE_TAG, type InventoryRecord, type OperationType } from '@/types/inventory'
 import { deleteInventoryRecord } from '@/api/inventory'
 
 const authStore = useAuthStore()
@@ -125,6 +144,9 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
+
+const selectedRecords = ref<InventoryRecord[]>([])
+const batchDeleting = ref(false)
 
 function onFilter() {
   query.page = 1
@@ -143,6 +165,10 @@ function formatTime(iso: string) {
   return iso ? iso.replace('T', ' ').slice(0, 19) : '—'
 }
 
+function handleSelectionChange(rows: InventoryRecord[]) {
+  selectedRecords.value = rows
+}
+
 async function handleDelete(id: number) {
   try {
     await deleteInventoryRecord(id)
@@ -150,6 +176,50 @@ async function handleDelete(id: number) {
     await loadRecords()
   } catch {
     // 错误由 axios 拦截器统一弹出
+  }
+}
+
+async function handleBatchDelete() {
+  if (selectedRecords.value.length === 0) {
+    ElMessage.warning('请先选择要删除的库存流水')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${selectedRecords.value.length} 条库存流水？删除会逐条回滚对应批次库存。`,
+      '批量删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  batchDeleting.value = true
+  let success = 0
+  let failed = 0
+  try {
+    for (const record of selectedRecords.value) {
+      try {
+        await deleteInventoryRecord(record.id)
+        success += 1
+      } catch {
+        failed += 1
+      }
+    }
+    selectedRecords.value = []
+    await loadRecords()
+    if (failed > 0) {
+      ElMessage.warning(`已删除并回滚 ${success} 条流水，${failed} 条删除失败`)
+    } else {
+      ElMessage.success(`已批量删除并回滚 ${success} 条流水`)
+    }
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -198,7 +268,24 @@ onActivated(loadRecords)
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
+  padding: 0;
   overflow: hidden;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.selection-count {
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .qty-positive {

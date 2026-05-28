@@ -43,12 +43,15 @@ class Settings(BaseSettings):
     login_max_failures: int = 5
     login_lockout_minutes: int = 15
 
-    # DeepSeek API 配置
-    deepseek_api_key: str = ""
-
-    # 阿里云 OCR API 配置
-    aliyun_ocr_access_key_id: str = ""
-    aliyun_ocr_access_key_secret: str = ""
+    # 阿里云百炼 qwen-vl-ocr OCR 配置
+    dashscope_api_key: str = ""
+    qwen_ocr_model: str = "qwen-vl-ocr-latest"
+    qwen_ocr_timeout_seconds: int = 120
+    qwen_ocr_max_attempts: int = 2
+    qwen_ocr_max_pixels: int = 4194304
+    ocr_preprocess_min_short_edge: int = 800
+    ocr_preprocess_target_short_edge: int = 1200
+    ocr_preprocess_jpeg_quality: int = 85
 
     # 文件上传配置
     upload_dir: str = "uploads"
@@ -101,6 +104,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",   # 容忍 .env 中未声明的多余键，避免旧配置残留导致启动失败
     )
 
 

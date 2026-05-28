@@ -2,8 +2,8 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useAlertsStore } from '@/stores/alerts'
 import { useAuthStore } from '@/stores/auth'
-import type { AlertType, AlertSeverity, AlertListQuery } from '@/types/alert'
-import { ElMessageBox } from 'element-plus'
+import type { Alert, AlertType, AlertSeverity, AlertListQuery } from '@/types/alert'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const alertsStore = useAlertsStore()
 const authStore = useAuthStore()
@@ -21,6 +21,8 @@ const query = ref<AlertListQuery>({
 })
 
 const scanning = ref(false)
+const selectedAlertIds = ref<number[]>([])
+const batchAction = ref<'read' | 'resolve' | null>(null)
 
 /* ── 类型 / 级别映射 ── */
 const typeLabels: Record<AlertType, string> = {
@@ -35,9 +37,32 @@ const severityConfig: Record<AlertSeverity, { label: string; type: 'danger' | 'w
   info:     { label: '提示', type: 'info' },
 }
 
+const currentPageIds = computed(() => alertsStore.list.map((item) => item.id))
+const selectedAlerts = computed<Alert[]>(() =>
+  alertsStore.list.filter((item) => selectedAlertIds.value.includes(item.id)),
+)
+const unreadSelectedAlerts = computed(() => selectedAlerts.value.filter((item) => !item.is_read))
+const unresolvedSelectedAlerts = computed(() => selectedAlerts.value.filter((item) => !item.is_resolved))
+const allCurrentPageSelected = computed({
+  get: () =>
+    currentPageIds.value.length > 0 &&
+    currentPageIds.value.every((id) => selectedAlertIds.value.includes(id)),
+  set: (checked: boolean) => {
+    if (checked) {
+      selectedAlertIds.value = Array.from(new Set([...selectedAlertIds.value, ...currentPageIds.value]))
+    } else {
+      selectedAlertIds.value = selectedAlertIds.value.filter((id) => !currentPageIds.value.includes(id))
+    }
+  },
+})
+const selectionIndeterminate = computed(() => {
+  const selectedCount = currentPageIds.value.filter((id) => selectedAlertIds.value.includes(id)).length
+  return selectedCount > 0 && selectedCount < currentPageIds.value.length
+})
+
 /* ── 生命周期 ── */
 async function loadInitial() {
-  await Promise.all([alertsStore.loadAlerts(query.value), alertsStore.loadStats()])
+  await refreshList()
 }
 
 onMounted(loadInitial)
@@ -48,6 +73,7 @@ async function handleScan() {
   scanning.value = true
   try {
     await alertsStore.runScan()
+    await refreshList()
   } finally {
     scanning.value = false
   }
@@ -55,30 +81,108 @@ async function handleScan() {
 
 async function handleReadAll() {
   await alertsStore.readAll()
+  await alertsStore.loadStats()
 }
 
 async function handleResolve(id: number) {
-  await ElMessageBox.confirm('确认将此预警标记为已解决？', '操作确认', {
-    confirmButtonText: '确认',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm('确认将此预警标记为已解决？', '操作确认', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
   await alertsStore.resolve(id)
+  await refreshList()
+}
+
+function pruneSelection() {
+  const visibleIds = new Set(currentPageIds.value)
+  selectedAlertIds.value = selectedAlertIds.value.filter((id) => visibleIds.has(id))
+}
+
+async function refreshList() {
+  await Promise.all([alertsStore.loadAlerts(query.value), alertsStore.loadStats()])
+  pruneSelection()
+}
+
+async function handleBatchRead() {
+  const ids = unreadSelectedAlerts.value.map((item) => item.id)
+  if (ids.length === 0) {
+    ElMessage.warning('请先选择未读预警')
+    return
+  }
+
+  batchAction.value = 'read'
+  try {
+    await alertsStore.readAlerts(ids)
+    await alertsStore.loadStats()
+    ElMessage.success(`已标记 ${ids.length} 条预警为已读`)
+  } finally {
+    batchAction.value = null
+  }
+}
+
+async function handleBatchResolve() {
+  const items = unresolvedSelectedAlerts.value
+  if (items.length === 0) {
+    ElMessage.warning('请先选择未解决预警')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认将选中的 ${items.length} 条预警标记为已解决？`,
+      '批量解决',
+      {
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  batchAction.value = 'resolve'
+  let success = 0
+  let failed = 0
+  try {
+    for (const item of items) {
+      try {
+        await alertsStore.resolve(item.id, false)
+        success += 1
+      } catch {
+        failed += 1
+      }
+    }
+    selectedAlertIds.value = []
+    await refreshList()
+    if (failed > 0) {
+      ElMessage.warning(`已解决 ${success} 条预警，${failed} 条处理失败`)
+    } else {
+      ElMessage.success(`已批量解决 ${success} 条预警`)
+    }
+  } finally {
+    batchAction.value = null
+  }
 }
 
 async function applyFilter() {
   query.value.page = 1
-  await alertsStore.loadAlerts(query.value)
+  await refreshList()
 }
 
 async function handlePageChange(page: number) {
   query.value.page = page
-  await alertsStore.loadAlerts(query.value)
+  await refreshList()
 }
 
-function resetFilter() {
+async function resetFilter() {
   query.value = { is_resolved: false, page: 1, page_size: 20 }
-  alertsStore.loadAlerts(query.value)
+  await refreshList()
 }
 </script>
 
@@ -178,6 +282,33 @@ function resetFilter() {
       <el-button @click="resetFilter">重置</el-button>
     </div>
 
+    <div v-if="alertsStore.list.length > 0" class="batch-actions">
+      <el-checkbox
+        v-model="allCurrentPageSelected"
+        :indeterminate="selectionIndeterminate"
+      >
+        当前页全选
+      </el-checkbox>
+      <span class="selection-count">已选 {{ selectedAlerts.length }} 项</span>
+      <el-button
+        plain
+        :disabled="unreadSelectedAlerts.length === 0 || batchAction !== null"
+        :loading="batchAction === 'read'"
+        @click="handleBatchRead"
+      >
+        批量已读
+      </el-button>
+      <el-button
+        type="primary"
+        plain
+        :disabled="unresolvedSelectedAlerts.length === 0 || batchAction !== null"
+        :loading="batchAction === 'resolve'"
+        @click="handleBatchResolve"
+      >
+        批量解决
+      </el-button>
+    </div>
+
     <!-- 预警列表 -->
     <div class="alert-list" v-loading="alertsStore.loading">
       <div
@@ -187,6 +318,11 @@ function resetFilter() {
         :class="[`severity-${item.severity}`, { unread: !item.is_read, resolved: item.is_resolved }]"
       >
         <div class="alert-indicator" />
+        <el-checkbox
+          v-model="selectedAlertIds"
+          :value="item.id"
+          class="alert-select"
+        />
 
         <div class="alert-body">
           <div class="alert-top">
@@ -326,6 +462,22 @@ function resetFilter() {
   }
 }
 
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.selection-count {
+  font-size: 13px;
+  color: #6b7280;
+}
+
 /* ── 预警列表 ── */
 .alert-list {
   display: flex;
@@ -375,6 +527,11 @@ function resetFilter() {
 .alert-body {
   flex: 1;
   min-width: 0;
+}
+
+.alert-select {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .alert-top {

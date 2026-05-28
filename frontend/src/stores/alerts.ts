@@ -63,14 +63,16 @@ export const useAlertsStore = defineStore('alerts', () => {
   }
 
   /** 解决预警 */
-  async function resolve(id: number) {
+  async function resolve(id: number, notify = true) {
     await resolveAlert(id)
     const item = list.value.find(a => a.id === id)
     if (item) {
       item.is_resolved = true
       item.is_read = true
     }
-    ElMessage.success('预警已标记解决')
+    if (notify) {
+      ElMessage.success('预警已标记解决')
+    }
   }
 
   return {

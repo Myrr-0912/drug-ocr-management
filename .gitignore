@@ -27,6 +27,10 @@ volumes/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# OCR 评测测试图（本地资产，不入库）
+backend/tests/ocr_eval/images/*
+!backend/tests/ocr_eval/images/.gitkeep
+
 # Node
 frontend/node_modules/
 frontend/dist/

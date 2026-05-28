@@ -50,11 +50,11 @@
         <el-button
           type="primary"
           :loading="ocrStore.uploading"
-          :disabled="!selectedFile"
+          :disabled="!selectedFile || ocrStore.uploading"
           class="recognize-btn"
           @click="startRecognize"
         >
-          {{ ocrStore.uploading ? '识别中...' : '开始识别' }}
+          {{ ocrStore.uploading ? '上传中...' : '开始识别' }}
         </el-button>
       </div>
 
@@ -79,6 +79,22 @@
             </el-tag>
           </div>
 
+          <!-- 识别中提示 -->
+          <el-alert
+            v-if="ocrStore.currentRecord.status === 'pending'"
+            title="识别任务已提交，正在后台处理，完成后会自动刷新结果"
+            type="info"
+            show-icon
+            :closable="false"
+            class="mb-16"
+          />
+
+          <div v-if="ocrStore.currentRecord.status === 'pending'" class="pending-actions">
+            <el-button type="primary" plain @click="resetResult">
+              返回上传图片
+            </el-button>
+          </div>
+
           <!-- 识别失败提示 -->
           <el-alert
             v-if="ocrStore.currentRecord.status === 'failed'"
@@ -88,17 +104,17 @@
             class="mb-16"
           />
 
-          <!-- 置信度 -->
+          <!-- 字段完整度 -->
           <div v-if="ocrStore.currentRecord.confidence != null" class="confidence-row">
-            <span class="confidence-label">识别置信度</span>
+            <span class="confidence-label">字段完整度</span>
             <el-progress
               :percentage="Math.round((ocrStore.currentRecord.confidence || 0) * 100)"
               :color="confidenceColor(ocrStore.currentRecord.confidence || 0)"
               :stroke-width="8"
               class="confidence-bar"
             />
-            <span class="confidence-source-tag" :class="ocrStore.currentRecord.extracted_data?.confidence_estimated ? 'is-estimated' : 'is-real'">
-              {{ ocrStore.currentRecord.extracted_data?.confidence_estimated ? '估算值' : 'API 真实数据' }}
+            <span class="confidence-source-tag is-estimated">
+              按字段计算
             </span>
           </div>
 
@@ -111,6 +127,7 @@
 
           <!-- 可编辑确认表单 -->
           <el-form
+            v-if="ocrStore.currentRecord.status !== 'pending'"
             ref="confirmFormRef"
             :model="confirmForm"
             :rules="confirmRules"
@@ -211,25 +228,154 @@
       </div>
     </div>
 
+    <!-- 入库任务队列 -->
+    <div class="card task-queue-section">
+      <div class="history-header">
+        <p class="panel-label" style="margin: 0">入库任务队列</p>
+        <div class="table-toolbar">
+          <span class="queue-count">{{ ocrStore.taskQueueRecords.length }} 个待处理</span>
+          <el-button
+            type="primary"
+            size="small"
+            :disabled="taskSelection.length === 0"
+            @click="handleBatchConfirm(taskSelection)"
+          >
+            批量确认
+          </el-button>
+          <el-button
+            type="danger"
+            size="small"
+            plain
+            :disabled="taskSelection.length === 0"
+            @click="handleBatchDelete(taskSelection)"
+          >
+            批量删除
+          </el-button>
+        </div>
+      </div>
+
+      <el-table
+        :data="ocrStore.taskQueueRecords"
+        row-key="id"
+        size="small"
+        class="history-table"
+        empty-text="暂无待处理 OCR 任务"
+        @selection-change="handleTaskSelectionChange"
+      >
+        <el-table-column type="selection" width="42" />
+        <el-table-column width="36">
+          <template #default="{ row }">
+            <span
+              v-if="row.status === 'pending'"
+              class="queue-status-icon is-loading"
+              aria-label="识别中"
+            />
+            <span
+              v-else-if="ocrStore.unreadTaskIds.includes(row.id)"
+              class="queue-status-icon is-unread"
+              aria-label="未查看"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="预览" width="72">
+          <template #default="{ row }">
+            <el-image
+              :src="`/uploads/${row.image_path}`"
+              :preview-src-list="[`/uploads/${row.image_path}`]"
+              fit="cover"
+              style="width: 48px; height: 48px; border-radius: 6px; cursor: zoom-in"
+              preview-teleported
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="识别药品" min-width="140">
+          <template #default="{ row }">
+            <span v-if="row.extracted_data?.name" class="drug-name">
+              {{ row.extracted_data.name }}
+            </span>
+            <span v-else class="no-data">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="批号" min-width="120">
+          <template #default="{ row }">
+            {{ row.extracted_data?.batch_number || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="有效期至" min-width="110">
+          <template #default="{ row }">
+            {{ row.extracted_data?.expiry_date || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="statusMap[row.status as OcrStatus].type as any" size="small" round>
+              {{ statusMap[row.status as OcrStatus].label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="130" fixed="right">
+          <template #default="{ row }">
+            <div class="history-actions">
+              <el-button
+                type="primary"
+                text
+                size="small"
+                @click="handleOpenQueueRecord(row)"
+              >
+                {{ historyActionLabel(row.status as OcrStatus) }}
+              </el-button>
+              <el-button
+                type="danger"
+                text
+                size="small"
+                @click="handleDelete(row)"
+              >
+                删除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
     <!-- OCR 历史记录 -->
     <div class="card history-section">
       <div class="history-header">
         <p class="panel-label" style="margin: 0">历史识别记录</p>
-        <el-select
-          v-model="filterStatus"
-          placeholder="全部状态"
-          clearable
-          style="width: 140px"
-          size="small"
-          @change="loadHistory"
-        >
-          <el-option
-            v-for="(v, k) in statusMap"
-            :key="k"
-            :label="v.label"
-            :value="k"
-          />
-        </el-select>
+        <div class="table-toolbar">
+          <el-button
+            type="primary"
+            size="small"
+            :disabled="historySelection.length === 0"
+            @click="handleBatchConfirm(historySelection)"
+          >
+            批量确认
+          </el-button>
+          <el-button
+            type="danger"
+            size="small"
+            plain
+            :disabled="historySelection.length === 0"
+            @click="handleBatchDelete(historySelection)"
+          >
+            批量删除
+          </el-button>
+          <el-select
+            v-model="filterStatus"
+            placeholder="全部状态"
+            clearable
+            style="width: 140px"
+            size="small"
+            @change="loadHistory"
+          >
+            <el-option
+              v-for="(v, k) in statusMap"
+              :key="k"
+              :label="v.label"
+              :value="k"
+            />
+          </el-select>
+        </div>
       </div>
 
       <el-table
@@ -238,7 +384,9 @@
         row-key="id"
         size="small"
         class="history-table"
+        @selection-change="handleHistorySelectionChange"
       >
+        <el-table-column type="selection" width="42" :selectable="isHistoryRowSelectable" />
         <el-table-column label="ID" prop="id" width="64" />
         <el-table-column label="预览" width="72">
           <template #default="{ row }">
@@ -269,12 +417,12 @@
             {{ row.extracted_data?.expiry_date || '—' }}
           </template>
         </el-table-column>
-        <el-table-column label="置信度" width="140">
+        <el-table-column label="完整度" width="140">
           <template #default="{ row }">
             <span v-if="row.confidence != null">
               {{ Math.round(row.confidence * 100) }}%
-              <span class="confidence-source-tag" :class="row.extracted_data?.confidence_estimated ? 'is-estimated' : 'is-real'">
-                {{ row.extracted_data?.confidence_estimated ? '估算值' : 'API 真实数据' }}
+              <span class="confidence-source-tag is-estimated">
+                按字段计算
               </span>
             </span>
             <span v-else>—</span>
@@ -292,17 +440,28 @@
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
-            <el-button
-              type="danger"
-              text
-              size="small"
-              :disabled="row.status === 'confirmed' && !authStore.isAdmin"
-              @click="handleDelete(row)"
-            >
-              删除
-            </el-button>
+            <div class="history-actions">
+              <el-button
+                v-if="row.status !== 'confirmed'"
+                type="primary"
+                text
+                size="small"
+                @click="handleOpenHistoryRecord(row)"
+              >
+                {{ historyActionLabel(row.status as OcrStatus) }}
+              </el-button>
+              <el-button
+                type="danger"
+                text
+                size="small"
+                :disabled="row.status === 'confirmed' && !authStore.isAdmin"
+                @click="handleDelete(row)"
+              >
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -323,14 +482,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, RefreshRight, DocumentChecked } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
 import { useOcrStore } from '@/stores/ocr'
 import { useAuthStore } from '@/stores/auth'
-import type { OcrStatus, OcrConfirmRequest } from '@/types/ocr'
+import type { OcrStatus, OcrConfirmRequest, OcrRecord } from '@/types/ocr'
 import { OCR_STATUS_MAP } from '@/types/ocr'
 
 const ocrStore = useOcrStore()
@@ -367,6 +526,8 @@ const confirmRules: FormRules = {
 // --- 历史记录 ---
 const filterStatus = ref<string | undefined>(undefined)
 const currentPage = ref(1)
+const taskSelection = ref<OcrRecord[]>([])
+const historySelection = ref<OcrRecord[]>([])
 
 // -------- 方法 --------
 
@@ -392,35 +553,155 @@ function handleDrop(e: DragEvent) {
 function setFile(file: File) {
   selectedFile.value = file
   previewUrl.value = URL.createObjectURL(file)
-  // 清除上次识别结果
-  ocrStore.currentRecord = null
 }
 
 async function startRecognize() {
   if (!selectedFile.value) return
   const record = await ocrStore.uploadAndRecognize(selectedFile.value)
   if (record) {
-    // 将识别结果预填入表单
-    const d = record.extracted_data || {}
-    confirmForm.drug_name = d.name || ''
-    confirmForm.approval_number = d.approval_number || ''
-    confirmForm.manufacturer = d.manufacturer || ''
-    confirmForm.specification = d.specification || ''
-    confirmForm.batch_number = d.batch_number || ''
-    confirmForm.production_date = d.production_date || undefined
-    confirmForm.expiry_date = d.expiry_date || ''
-    confirmForm.quantity = d.quantity ?? 0
-    confirmForm.unit = '盒'
-
     // 新记录已写入 DB，立即刷新历史列表使其可见（用户取消时不需再刷新页面）
     loadHistory()
+    clearSelectedFile()
+
+    if (record.status === 'pending') {
+      ElMessage.success('识别任务已提交，完成后会自动刷新结果')
+      watchQueueRecord(record.id)
+      return
+    }
 
     if (record.status === 'failed') {
       ElMessage.error('识别失败：' + (record.error_message || '请重试'))
     } else {
-      ElMessage.success('识别完成，请核对并确认入库')
+      ocrStore.markTaskRead(record.id)
+      openRecordForReview(record)
     }
   }
+}
+
+function watchQueueRecord(recordId: number) {
+  void ocrStore.pollRecordUntilDone(recordId).then((finalRecord) => {
+    loadHistory()
+    void ocrStore.loadTaskQueue()
+    if (!finalRecord || finalRecord.status === 'pending') return
+    if (finalRecord.status === 'success') {
+      ElMessage.success('识别完成，已加入入库任务队列')
+    } else if (finalRecord.status === 'failed') {
+      ElMessage.error('识别失败，请在入库任务队列中查看')
+    }
+  })
+}
+
+function clearSelectedFile() {
+  selectedFile.value = null
+  previewUrl.value = ''
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+function fillConfirmForm(record: OcrRecord) {
+  const d = record.extracted_data || {}
+  confirmForm.drug_name = d.name || ''
+  confirmForm.approval_number = d.approval_number || ''
+  confirmForm.manufacturer = d.manufacturer || ''
+  confirmForm.specification = d.specification || ''
+  confirmForm.batch_number = d.batch_number || ''
+  confirmForm.production_date = d.production_date || undefined
+  confirmForm.expiry_date = d.expiry_date || ''
+  confirmForm.quantity = d.quantity ?? 0
+  confirmForm.unit = '盒'
+}
+
+function textValue(value: unknown): string {
+  if (value == null) return ''
+  return String(value).trim()
+}
+
+function buildConfirmPayload(record: OcrRecord): OcrConfirmRequest | null {
+  const data = record.extracted_data || {}
+  const drugName = textValue(data.name)
+  const batchNumber = textValue(data.batch_number)
+  const expiryDate = textValue(data.expiry_date)
+
+  if (!drugName || !batchNumber || !expiryDate) {
+    return null
+  }
+
+  return {
+    drug_name: drugName,
+    approval_number: textValue(data.approval_number) || undefined,
+    manufacturer: textValue(data.manufacturer) || undefined,
+    specification: textValue(data.specification) || undefined,
+    batch_number: batchNumber,
+    production_date: textValue(data.production_date) || undefined,
+    expiry_date: expiryDate,
+    quantity: data.quantity ?? 0,
+    unit: '盒',
+  }
+}
+
+function historyActionLabel(status: OcrStatus): string {
+  if (status === 'success') return '确认'
+  return '查看'
+}
+
+function handleTaskSelectionChange(rows: OcrRecord[]) {
+  taskSelection.value = rows
+}
+
+function handleHistorySelectionChange(rows: OcrRecord[]) {
+  historySelection.value = rows
+}
+
+function isHistoryRowSelectable(row: OcrRecord): boolean {
+  return authStore.isAdmin || row.status !== 'confirmed'
+}
+
+function openRecordForReview(record: OcrRecord) {
+  ocrStore.currentRecord = record
+  fillConfirmForm(record)
+}
+
+async function handleOpenQueueRecord(row: OcrRecord) {
+  ocrStore.markTaskRead(row.id)
+  selectedFile.value = null
+  previewUrl.value = `/uploads/${row.image_path}`
+  if (fileInput.value) fileInput.value.value = ''
+
+  const refreshed = await ocrStore.refreshRecord(row.id)
+  const record = refreshed || row
+  ocrStore.currentRecord = record
+
+  if (record.status === 'pending') {
+    ElMessage.info('正在查看该识别任务，完成后会自动刷新当前面板')
+    const finalRecord = await ocrStore.pollRecordUntilDone(record.id)
+    loadHistory()
+    void ocrStore.loadTaskQueue()
+    if (!finalRecord || finalRecord.status === 'pending') return
+    if (ocrStore.currentRecord?.id !== finalRecord.id) return
+    ocrStore.currentRecord = finalRecord
+    if (finalRecord.status === 'success') {
+      fillConfirmForm(finalRecord)
+      ElMessage.success('识别完成，请核对并确认入库')
+    } else if (finalRecord.status === 'failed') {
+      fillConfirmForm(finalRecord)
+      ElMessage.error('识别失败：' + (finalRecord.error_message || '请重试'))
+    }
+    return
+  }
+
+  if (record.status === 'success') {
+    openRecordForReview(record)
+    ElMessage.success('已载入待确认记录')
+    return
+  }
+
+  if (record.status === 'failed') {
+    openRecordForReview(record)
+    ElMessage.error('识别失败：' + (record.error_message || '请重试'))
+  }
+}
+
+async function handleOpenHistoryRecord(row: OcrRecord) {
+  await handleOpenQueueRecord(row)
 }
 
 async function handleConfirm() {
@@ -433,33 +714,123 @@ async function handleConfirm() {
     if (ok) {
       resetResult()
       loadHistory()
+      ocrStore.loadTaskQueue()
     }
   })
 }
 
+async function handleBatchConfirm(rows: OcrRecord[]) {
+  const candidates = rows.filter((row) => row.status === 'success')
+  const ready = candidates
+    .map((row) => ({ row, payload: buildConfirmPayload(row) }))
+    .filter((item): item is { row: OcrRecord; payload: OcrConfirmRequest } => item.payload != null)
+
+  const missing = candidates.length - ready.length
+  const skipped = rows.length - candidates.length + missing
+
+  if (ready.length === 0) {
+    ElMessage.warning('没有可批量确认的待确认记录；缺少必填字段的记录请先单独核对')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      skipped > 0
+        ? `将确认 ${ready.length} 条记录，跳过 ${skipped} 条不可确认或缺少必填字段的记录。继续？`
+        : `确认将选中的 ${ready.length} 条记录批量入库？`,
+      '批量确认',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
+  let success = 0
+  for (const item of ready) {
+    if (await ocrStore.confirmRecord(item.row.id, item.payload, false)) {
+      success++
+    }
+  }
+
+  taskSelection.value = []
+  historySelection.value = []
+  await refreshTables()
+
+  if (success === ready.length) {
+    ElMessage.success(`已批量确认 ${success} 条记录`)
+  } else {
+    ElMessage.warning(`已确认 ${success} 条，${ready.length - success} 条失败，请单独处理`)
+  }
+}
+
+async function handleBatchDelete(rows: OcrRecord[]) {
+  const deletable = rows.filter((row) => authStore.isAdmin || row.status !== 'confirmed')
+  const skipped = rows.length - deletable.length
+
+  if (deletable.length === 0) {
+    ElMessage.warning('没有可删除的记录')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      skipped > 0
+        ? `将删除 ${deletable.length} 条记录，跳过 ${skipped} 条无权限删除的已入库记录。继续？`
+        : `确认删除选中的 ${deletable.length} 条记录？`,
+      '批量删除',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
+  let success = 0
+  for (const row of deletable) {
+    if (await ocrStore.deleteRecord(row.id, false)) {
+      success++
+    }
+  }
+
+  taskSelection.value = []
+  historySelection.value = []
+  await refreshTables()
+
+  if (success === deletable.length) {
+    ElMessage.success(`已批量删除 ${success} 条记录`)
+  } else {
+    ElMessage.warning(`已删除 ${success} 条，${deletable.length - success} 条失败`)
+  }
+}
+
 function resetResult() {
   ocrStore.currentRecord = null
-  selectedFile.value = null
-  previewUrl.value = ''
-  // 清空 input 的原生值，确保选同一文件时仍能触发 @change
-  if (fileInput.value) fileInput.value.value = ''
+  clearSelectedFile()
 }
 
 async function handleDelete(row: { id: number; status: string }) {
   try {
     await ElMessageBox.confirm('确认删除该识别记录？', '提示', { type: 'warning' })
     await ocrStore.deleteRecord(row.id)
+    ocrStore.loadTaskQueue()
   } catch {
     // 用户点击弹框"取消"，忽略
   }
 }
 
 function loadHistory() {
-  ocrStore.loadRecords({
+  return ocrStore.loadRecords({
     status: filterStatus.value || undefined,
     page: currentPage.value,
     page_size: 20,
   })
+}
+
+function loadQueue() {
+  return ocrStore.loadTaskQueue()
+}
+
+async function refreshTables() {
+  await Promise.all([loadHistory(), loadQueue()])
 }
 
 function confidenceColor(val: number): string {
@@ -473,7 +844,13 @@ function formatDate(iso: string): string {
   return iso.replace('T', ' ').slice(0, 19)
 }
 
-onMounted(loadHistory)
+onMounted(() => {
+  loadHistory()
+  loadQueue()
+})
+onBeforeUnmount(() => {
+  ocrStore.cancelPolling()
+})
 </script>
 
 <style scoped>
@@ -686,6 +1063,10 @@ onMounted(loadHistory)
   gap: 10px;
   margin-top: 8px;
 }
+.pending-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 .mb-16 {
   margin-bottom: 16px;
 }
@@ -710,6 +1091,9 @@ onMounted(loadHistory)
 }
 
 /* 历史记录 */
+.task-queue-section {
+  padding: 20px 24px;
+}
 .history-section {
   padding: 20px 24px;
 }
@@ -719,9 +1103,45 @@ onMounted(loadHistory)
   justify-content: space-between;
   margin-bottom: 16px;
 }
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.queue-count {
+  font-size: 12px;
+  color: #6b7280;
+}
+.queue-status-icon {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.queue-status-icon.is-unread {
+  background: #3b82f6;
+}
+.queue-status-icon.is-loading {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #bfdbfe;
+  border-top-color: #3b82f6;
+  animation: queue-spin 0.8s linear infinite;
+}
+@keyframes queue-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .history-table {
   border-radius: 6px;
   overflow: hidden;
+}
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .drug-name {
   font-weight: 500;

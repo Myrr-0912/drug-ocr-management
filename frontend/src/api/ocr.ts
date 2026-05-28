@@ -2,11 +2,13 @@ import request from './index'
 import type { ApiResponse, PageResponse } from '@/types/common'
 import type { OcrRecord, OcrConfirmRequest, OcrConfirmResponse } from '@/types/ocr'
 
+const OCR_UPLOAD_TIMEOUT_MS = 260000
+
 /** 上传图片并触发 OCR 识别 */
 export function uploadOcrImage(formData: FormData) {
   return request.post<ApiResponse<OcrRecord>>('/ocr/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60000,  // OCR 最多等待 60s
+    timeout: OCR_UPLOAD_TIMEOUT_MS,
   })
 }
 

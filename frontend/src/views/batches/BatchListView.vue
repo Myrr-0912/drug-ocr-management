@@ -45,12 +45,32 @@
 
     <!-- 表格 -->
     <div class="card table-card">
+      <div v-if="authStore.isPharmacist" class="batch-toolbar">
+        <span class="selection-count">已选 {{ selectedBatches.length }} 项</span>
+        <el-button
+          type="danger"
+          plain
+          :disabled="selectedBatches.length === 0"
+          :loading="batchDeleting"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </el-button>
+      </div>
       <el-table
         v-loading="batchesStore.loading"
         :data="batchesStore.list"
         stripe
         style="width: 100%"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column
+          v-if="authStore.isPharmacist"
+          type="selection"
+          width="48"
+          fixed="left"
+          :selectable="isBatchSelectable"
+        />
         <el-table-column prop="drug_name" label="药品名称" min-width="150" show-overflow-tooltip />
         <el-table-column prop="batch_number" label="批号" min-width="140" />
         <el-table-column prop="production_date" label="生产日期" width="120">
@@ -192,7 +212,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -215,8 +235,10 @@ const query = reactive({
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const batchDeleting = ref(false)
 const editingBatch = ref<Batch | null>(null)
 const formRef = ref<FormInstance>()
+const selectedBatches = ref<Batch[]>([])
 
 /** 药品下拉选项 */
 const drugOptions = ref<{ id: number; name: string }[]>([])
@@ -283,6 +305,14 @@ function resetForm() {
   formRef.value?.clearValidate()
 }
 
+function isBatchSelectable(row: Batch) {
+  return row.quantity === 0
+}
+
+function handleSelectionChange(rows: Batch[]) {
+  selectedBatches.value = rows
+}
+
 async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
@@ -323,6 +353,50 @@ async function handleDelete(id: number) {
     ElMessage.success('删除成功')
   } catch {
     // 错误由 axios 拦截器统一处理
+  }
+}
+
+async function handleBatchDelete() {
+  if (selectedBatches.value.length === 0) {
+    ElMessage.warning('请先选择库存量为 0 的批次')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${selectedBatches.value.length} 个零库存批次？`,
+      '批量删除',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  batchDeleting.value = true
+  let success = 0
+  let failed = 0
+  try {
+    for (const batch of selectedBatches.value) {
+      try {
+        await batchesStore.remove(batch.id)
+        success += 1
+      } catch {
+        failed += 1
+      }
+    }
+    selectedBatches.value = []
+    await loadList()
+    if (failed > 0) {
+      ElMessage.warning(`已删除 ${success} 个批次，${failed} 个删除失败`)
+    } else {
+      ElMessage.success(`已批量删除 ${success} 个批次`)
+    }
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -383,7 +457,24 @@ onActivated(() => {
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
+  padding: 0;
   overflow: hidden;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.selection-count {
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .qty-normal {

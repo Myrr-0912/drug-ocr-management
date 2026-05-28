@@ -5,11 +5,11 @@
 [![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com)
 
-> 通过阿里云 OCR 技术自动识别药品包装图片，提取药品名称、规格、批号、有效期等关键信息，并提供完整的药品档案管理、库存管理、批次追踪、过期预警及用户权限管理功能的智能化药品管理平台。
+> 通过 Qwen-OCR 视觉文字识别模型自动识别药品包装图片，提取药品名称、规格、批号、有效期等关键信息，并提供完整的药品档案管理、库存管理、批次追踪、过期预警及用户权限管理功能的智能化药品管理平台。
 
 ## ✨ 功能特性
 
-- **OCR 智能识别** — 调用阿里云文字识别 API（RecognizeGeneral），正则引擎自动提取结构化字段
+- **OCR 智能识别** — 调用通义千问 Qwen-OCR 模型（qwen-vl-ocr-latest），模型抽取与正则兜底双路提取结构化字段
 - **药品档案管理** — 药品信息 CRUD，支持按名称/批准文号/生产企业搜索
 - **库存管理** — 入库/出库/盘点，实时追踪库存数量
 - **批次管理** — 多批次追踪，自动计算有效期状态
@@ -27,7 +27,7 @@
 | 数据库 | MySQL 8.0 / Alembic 迁移 |
 | 缓存 | Redis（Token 黑名单 + 登录限流） |
 | 认证 | JWT (python-jose + bcrypt) + Refresh Token 旋转 |
-| OCR | 阿里云文字识别 API（alibabacloud_ocr_api20210707） |
+| OCR | 通义千问 Qwen-OCR（qwen-vl-ocr-latest，阿里云百炼） |
 | 邮件 | 阿里云 SMTP（aiosmtplib 异步发送） |
 | 定时任务 | APScheduler |
 | 前端 | Vue 3 + TypeScript + Vite |
@@ -169,8 +169,7 @@ docker compose down
 |------|------|------|
 | `DB_PASSWORD` | MySQL 密码 | ✅ |
 | `JWT_SECRET_KEY` | JWT 签名密钥（≥32位，可用 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成） | ✅ |
-| `ALIYUN_OCR_ACCESS_KEY_ID` | 阿里云 RAM AccessKey ID | ✅ |
-| `ALIYUN_OCR_ACCESS_KEY_SECRET` | 阿里云 RAM AccessKey Secret | ✅ |
+| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key（qwen-vl-ocr） | ✅ |
 | `REDIS_HOST` | Redis 地址，默认 `localhost` | — |
 | `REDIS_PASSWORD` | 本地开发 Redis 密码；如根目录 `.env` 配了 `REDIS_PASSWORD`，这里需保持一致，否则留空 | — |
 | `SMTP_USER` / `SMTP_PASSWORD` | 阿里云 SMTP 账号（忘记密码功能） | — |
@@ -281,9 +280,9 @@ Token 续期 POST /api/v1/auth/refresh
         ├─ 校验文件类型（JPG/PNG/BMP/WebP）及大小（≤10MB）
         ├─ 保存图片到 uploads/ocr/<uuid>.jpg
         ├─ 创建 OcrRecord（status: pending）
-        ├─ 调用阿里云 OCR（线程池中执行，不阻塞事件循环）
-        │       └─ 返回 raw_text + confidence
-        ├─ 正则解析：药品名称 / 批准文号 / 规格 / 生产企业 / 批号 / 有效期
+        ├─ 图像预处理 + 调用 qwen-vl-ocr 识别（异步 httpx）
+        │       └─ 返回 raw_text + 模型结构化字段 + 完整度置信度
+        ├─ 模型抽取 + 正则兜底合并：药品名称 / 批准文号 / 规格 / 生产企业 / 批号 / 有效期
         └─ 更新 OcrRecord（status: success，存储 extracted_data）
 
 确认入库 POST /api/v1/ocr/{id}/confirm
@@ -332,7 +331,7 @@ Token 续期 POST /api/v1/auth/refresh
 │   │   ├── models/         # SQLAlchemy ORM 模型
 │   │   ├── schemas/        # Pydantic 请求/响应模型
 │   │   ├── services/       # 业务逻辑层
-│   │   ├── ocr/            # OCR 识别引擎（阿里云客户端 + 文本解析器）
+│   │   ├── ocr/            # OCR 识别引擎（图像预处理 + Qwen-OCR 客户端 + 流水线 + 文本解析）
 │   │   ├── core/           # 认证、异常、Redis、邮件工具
 │   │   └── tasks/          # APScheduler 定时预警任务
 │   └── alembic/            # 数据库迁移脚本

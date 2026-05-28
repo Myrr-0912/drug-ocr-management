@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RequireLogin, get_current_user
@@ -15,13 +15,14 @@ router = APIRouter(prefix="/ocr", tags=["OCR 识别"])
 
 @router.post("/upload", summary="上传图片并识别")
 async def upload_and_recognize(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="药品图片（JPG/PNG/BMP/WebP，≤10MB）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = RequireLogin,
 ):
-    """上传药品图片，触发 OCR 识别，返回结构化提取结果供用户核对"""
+    """上传药品图片，创建 OCR 记录，并在后台触发识别。"""
     image_bytes = await file.read()
-    record = await ocr_service.upload_and_recognize(
+    record = await ocr_service.create_upload_record(
         db=db,
         image_bytes=image_bytes,
         filename=file.filename or "upload.jpg",
@@ -29,7 +30,8 @@ async def upload_and_recognize(
         operator_id=current_user.id,
     )
     await db.commit()
-    return ok(OcrRecordResponse.model_validate(record), "识别完成")
+    background_tasks.add_task(ocr_service.recognize_record_background, record.id, image_bytes)
+    return ok(OcrRecordResponse.model_validate(record), "识别任务已提交")
 
 
 @router.post("/{record_id}/confirm", summary="确认识别结果并入库")
