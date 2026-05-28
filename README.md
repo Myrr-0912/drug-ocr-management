@@ -50,7 +50,7 @@
 **前置条件**
 
 - Docker Desktop ≥ 24（Windows / macOS）或 Docker Engine ≥ 24（Linux），含 Docker Compose v2
-- 宿主机端口 `18080`、`18443` 空闲
+- 宿主机端口 `80`、`443` 空闲
 
 **启动命令**
 
@@ -61,7 +61,7 @@ cp .env.example .env
 # 2. 一键启动（首次会构建镜像，耗时数分钟）
 docker compose up -d --build
 
-# 3. 浏览器访问 http://localhost:18080
+# 3. 浏览器访问 http://localhost
 ```
 
 启动完成后，用 `.env` 中的 `INITIAL_ADMIN_USERNAME` / `INITIAL_ADMIN_PASSWORD` 登录。
