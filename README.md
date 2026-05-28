@@ -10,6 +10,7 @@
 ## ✨ 功能特性
 
 - **OCR 智能识别** — 调用通义千问 Qwen-OCR 模型（qwen-vl-ocr-latest），模型抽取与正则兜底双路提取结构化字段
+- **OSS 临时图片链路** — 上传图片先由后端保存为业务记录，再通过阿里云 OSS 临时签名 URL 传递给 Qwen-OCR，避免大图直接塞入模型请求体
 - **药品档案管理** — 药品信息 CRUD，支持按名称/批准文号/生产企业搜索
 - **库存管理** — 入库/出库/盘点，实时追踪库存数量
 - **批次管理** — 多批次追踪，自动计算有效期状态
@@ -28,6 +29,7 @@
 | 缓存 | Redis（Token 黑名单 + 登录限流） |
 | 认证 | JWT (python-jose + bcrypt) + Refresh Token 旋转 |
 | OCR | 通义千问 Qwen-OCR（qwen-vl-ocr-latest，阿里云百炼） |
+| 对象存储 | 阿里云 OSS（OCR 图片临时签名 URL） |
 | 邮件 | 阿里云 SMTP（aiosmtplib 异步发送） |
 | 定时任务 | asyncio 后台任务（每天 00:05 执行） |
 | 前端 | Vue 3 + TypeScript + Vite |
@@ -174,6 +176,11 @@ docker compose down
 | `DB_PASSWORD` | MySQL 密码 | ✅ |
 | `JWT_SECRET_KEY` | JWT 签名密钥（≥32位，可用 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成） | ✅ |
 | `DASHSCOPE_API_KEY` | 阿里云百炼 API Key（qwen-vl-ocr） | ✅ |
+| `ALIYUN_OSS_ENDPOINT` | OSS 访问端点，用于生成 Qwen-OCR 可访问的临时签名图片 URL | ✅ |
+| `ALIYUN_OSS_BUCKET` | 保存 OCR 临时图片的 OSS Bucket 名称 | ✅ |
+| `ALIYUN_OSS_ACCESS_KEY_ID` / `ALIYUN_OSS_ACCESS_KEY_SECRET` | OSS 上传与签名 URL 生成凭据 | ✅ |
+| `ALIYUN_OSS_OCR_PREFIX` | OCR 图片在 Bucket 中的对象前缀，默认 `ocr/qwen` | — |
+| `ALIYUN_OSS_SIGNED_URL_EXPIRE_SECONDS` | 临时签名 URL 有效期，默认 `1800` 秒 | — |
 | `REDIS_HOST` | Redis 地址，默认 `localhost` | — |
 | `REDIS_PASSWORD` | 本地开发 Redis 密码；如根目录 `.env` 配了 `REDIS_PASSWORD`，这里需保持一致，否则留空 | — |
 | `SMTP_USER` / `SMTP_PASSWORD` | 阿里云 SMTP 账号（忘记密码功能） | — |
@@ -282,10 +289,11 @@ Token 续期 POST /api/v1/auth/refresh
 ```
 上传 POST /api/v1/ocr/upload
         ├─ 校验文件类型（JPG/PNG/BMP/WebP）及大小（≤10MB）
-        ├─ 保存图片到 uploads/ocr/<uuid>.jpg
+        ├─ 保存图片到 uploads/ocr/<uuid>.jpg（用于系统预览、历史记录和任务恢复）
         ├─ 创建 OcrRecord（status: pending）
-        ├─ 图像预处理 + 调用 qwen-vl-ocr 识别（异步 httpx）
-        │       └─ 返回 raw_text + 模型结构化字段 + 完整度置信度
+        ├─ 将图片字节上传到阿里云 OSS，并生成短期有效的临时签名 URL
+        ├─ 将 OSS 临时 URL 作为 image_url 提交给 qwen-vl-ocr 识别（异步 httpx）
+        │       └─ 返回 raw_text + 模型结构化字段
         ├─ 模型抽取 + 正则兜底合并：药品名称 / 批准文号 / 规格 / 生产企业 / 批号 / 有效期
         └─ 更新 OcrRecord（status: success，存储 extracted_data）
 
@@ -295,6 +303,8 @@ Token 续期 POST /api/v1/auth/refresh
         ├─ 创建 DrugBatch 记录，关联 source_ocr_id
         └─ OcrRecord 状态更新为 confirmed
 ```
+
+> OCR 图片采用“本地业务留存 + OSS 临时签名 URL”的双链路：`uploads/ocr` 中的文件服务于系统页面预览、历史记录和暂停后恢复；OSS 对象主要服务于云端 Qwen-OCR 调用。相比把图片直接转成 base64 放进 JSON 请求体，临时 URL 请求体更小、超时和请求体限制风险更低，也不需要把后端暴露成公网图片下载服务；签名 URL 到期后自动失效，降低图片长期泄露风险。
 
 ### 4. 库存与预警流程
 
