@@ -29,7 +29,7 @@
 | 认证 | JWT (python-jose + bcrypt) + Refresh Token 旋转 |
 | OCR | 通义千问 Qwen-OCR（qwen-vl-ocr-latest，阿里云百炼） |
 | 邮件 | 阿里云 SMTP（aiosmtplib 异步发送） |
-| 定时任务 | APScheduler |
+| 定时任务 | asyncio 后台任务（每天 00:05 执行） |
 | 前端 | Vue 3 + TypeScript + Vite |
 | UI | Element Plus + ECharts |
 | 状态管理 | Pinia |
@@ -244,7 +244,7 @@ uvicorn app.main:app
         ├─ 创建 uploads/ 目录（存储上传图片）
         ├─ 初始化 Redis 连接池（失败则终止启动）
         ├─ 首次启动自动创建 admin 账号（users 表为空时生效）
-        ├─ 启动 APScheduler：每天 00:05 执行预警扫描
+        ├─ 启动后台定时任务：每天 00:05 执行预警扫描
         └─ 挂载路由 /api/v1/* 及静态文件 /uploads/*
 ```
 
@@ -337,7 +337,7 @@ Token 续期 POST /api/v1/auth/refresh
 │   │   ├── services/       # 业务逻辑层
 │   │   ├── ocr/            # OCR 识别引擎（图像预处理 + Qwen-OCR 客户端 + 流水线 + 文本解析）
 │   │   ├── core/           # 认证、异常、Redis、邮件工具
-│   │   └── tasks/          # APScheduler 定时预警任务
+│   │   └── tasks/          # asyncio 后台定时预警任务
 │   └── alembic/            # 数据库迁移脚本
 └── frontend/
     └── src/

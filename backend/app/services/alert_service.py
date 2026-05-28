@@ -185,7 +185,9 @@ async def get_alerts(
     total: int = total_r.scalar_one()
 
     unread_r = await db.execute(
-        select(func.count()).select_from(Alert).where(Alert.is_read.is_(False))
+        select(func.count()).select_from(Alert).where(
+            and_(Alert.is_read.is_(False), Alert.is_resolved.is_(False))
+        )
     )
     unread_count: int = unread_r.scalar_one()
 
@@ -202,7 +204,7 @@ async def get_alerts(
 
 
 async def get_stats(db: AsyncSession) -> dict:
-    """预警统计：各维度计数"""
+    """预警统计：各维度计数（仅未解决）"""
     rows = await db.execute(
         select(
             func.count().label("total"),
@@ -214,6 +216,7 @@ async def get_stats(db: AsyncSession) -> dict:
             func.sum(func.if_(Alert.alert_type == AlertType.expired, 1, 0)).label("expired"),
             func.sum(func.if_(Alert.alert_type == AlertType.low_stock, 1, 0)).label("low_stock"),
         )
+        .where(Alert.is_resolved.is_(False))
     )
     row = rows.one()
     return {

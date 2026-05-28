@@ -7,7 +7,7 @@ import os
 
 from app.config import settings
 from app.api.v1.router import api_router
-from app.tasks.scheduler import setup_scheduler
+from app.tasks.scheduler import start_scheduler, stop_scheduler
 from app.core.redis_client import init_redis, close_redis
 from app.database import AsyncSessionLocal
 from app.services.seed_service import ensure_initial_admin
@@ -25,14 +25,13 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await ensure_initial_admin(db)
 
-    # 启动定时任务调度器
-    scheduler = setup_scheduler()
-    scheduler.start()
+    # 启动定时任务（每天 00:05 预警扫描）
+    start_scheduler()
 
     yield
 
-    # 关闭调度器
-    scheduler.shutdown(wait=False)
+    # 取消后台定时任务
+    stop_scheduler()
     # 关闭 Redis 连接池
     await close_redis()
 
