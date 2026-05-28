@@ -42,6 +42,9 @@ frontend/.vite/
 *.swp
 *.swo
 
+# 毕设论文（不入库）
+ujsthesis/
+
 # 系统文件
 .DS_Store
 Thumbs.db
