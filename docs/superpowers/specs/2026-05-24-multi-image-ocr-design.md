@@ -58,17 +58,17 @@
 
 保留 `image_path` 字段作为封面图路径，取第一张上传图片，兼容现有历史列表、预览和旧数据。
 
-`extracted_data` 扩展为可包含多图诊断信息：
+`extracted_data` 扩展为可包含多图诊断信息。下面只展示结构，字段值必须来自真实 OCR 识别和人工确认，系统不预置任何药品示例数据：
 
 ```json
 {
-  "name": "阿莫西林胶囊",
-  "approval_number": "国药准字H20044416",
-  "manufacturer": "广州白云山制药股份有限公司",
-  "specification": "0.25g×24粒",
-  "batch_number": "20240315",
-  "production_date": "2024-03-15",
-  "expiry_date": "2026-03-01",
+  "name": "<真实 OCR 识别出的药品名称>",
+  "approval_number": "<真实 OCR 识别出的批准文号>",
+  "manufacturer": "<真实 OCR 识别出的生产企业>",
+  "specification": "<真实 OCR 识别出的规格>",
+  "batch_number": "<真实 OCR 识别出的批号>",
+  "production_date": "<真实 OCR 识别出的生产日期>",
+  "expiry_date": "<真实 OCR 识别出的有效期>",
   "quantity": null,
   "confidence_estimated": true,
   "multi_image": {
@@ -283,7 +283,7 @@ recognize_and_extract(image_bytes) -> RecognitionResult
 ```
 DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-pro
+DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_TIMEOUT_SECONDS=30
 ```
 
@@ -305,18 +305,18 @@ LLM 校验仅在“无重叠字段”分支触发，避免每次上传都增加�
   "images": [
     {
       "image_index": 1,
-      "raw_text": "阿莫西林胶囊\n规格：0.25g×24粒",
+      "raw_text": "<第1张图片真实 OCR 文本>",
       "fields": {
-        "name": "阿莫西林胶囊",
-        "specification": "0.25g×24粒"
+        "name": "<第1张图片识别出的药品名称>",
+        "specification": "<第1张图片识别出的规格>"
       }
     },
     {
       "image_index": 2,
-      "raw_text": "生产企业：广州白云山制药股份有限公司\n有效期至：2026-03-01",
+      "raw_text": "<第2张图片真实 OCR 文本>",
       "fields": {
-        "manufacturer": "广州白云山制药股份有限公司",
-        "expiry_date": "2026-03-01"
+        "manufacturer": "<第2张图片识别出的生产企业>",
+        "expiry_date": "<第2张图片识别出的有效期>"
       }
     }
   ]

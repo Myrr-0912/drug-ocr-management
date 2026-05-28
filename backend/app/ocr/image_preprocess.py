@@ -1,7 +1,7 @@
 """
 图像预处理 — OCR 识别前的几何与质量优化
 
-处理链：EXIF 方向修正 → 自动纠偏 → 分辨率放大 → 轻度对比度增强
+处理链：EXIF 方向修正 → 自动纠偏 → 小图放大 → 大图下采样 → 轻度对比度增强
 任何异常均记录日志并返回原始字节，绝不影响主识别流程。
 保留彩色、不做二值化（qwen-vl-ocr 在干净彩色图上表现最好）。
 """
@@ -70,6 +70,19 @@ def _upscale_if_small(img: np.ndarray) -> np.ndarray:
     return cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
 
 
+def _downscale_if_large(img: np.ndarray) -> np.ndarray:
+    """像素数过大时等比下采样，减少 OSS 上传体积和 OCR 拉取耗时。"""
+    h, w = img.shape[:2]
+    max_pixels = max(1, settings.qwen_ocr_max_pixels)
+    current_pixels = h * w
+    if current_pixels <= max_pixels:
+        return img
+    scale = (max_pixels / current_pixels) ** 0.5
+    new_w = max(1, int(w * scale))
+    new_h = max(1, int(h * scale))
+    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+
 def _enhance_contrast(img: np.ndarray) -> np.ndarray:
     """对亮度通道做 CLAHE 自适应对比度增强（轻度）"""
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
@@ -93,6 +106,7 @@ def preprocess_image(image_bytes: bytes) -> bytes:
             img = _rotate(img, angle)
 
         img = _upscale_if_small(img)
+        img = _downscale_if_large(img)
         img = _enhance_contrast(img)
 
         jpeg_quality = max(60, min(95, settings.ocr_preprocess_jpeg_quality))

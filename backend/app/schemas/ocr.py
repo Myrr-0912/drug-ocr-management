@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Any
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.models.ocr_record import OcrStatus
 
@@ -17,6 +17,21 @@ class ExtractedDrugData(BaseModel):
     quantity: int | None = None         # 数量
 
 
+class OcrRecordImageResponse(BaseModel):
+    id: int
+    ocr_record_id: int
+    image_path: str
+    image_index: int
+    raw_text: str | None = None
+    extracted_data: dict | None = None
+    confidence: float | None = None
+    status: OcrStatus
+    error_message: str | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class OcrRecordResponse(BaseModel):
     id: int
     image_path: str
@@ -28,6 +43,24 @@ class OcrRecordResponse(BaseModel):
     batch_id: int | None = None
     error_message: str | None = None
     created_at: datetime
+    images: list[OcrRecordImageResponse] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def sort_images(self) -> "OcrRecordResponse":
+        self.images = sorted(self.images, key=lambda image: image.image_index)
+        return self
+
+    @computed_field
+    @property
+    def image_paths(self) -> list[str]:
+        if self.images:
+            return [image.image_path for image in self.images]
+        return [self.image_path]
+
+    @computed_field
+    @property
+    def image_count(self) -> int:
+        return len(self.image_paths)
 
     model_config = {"from_attributes": True}
 

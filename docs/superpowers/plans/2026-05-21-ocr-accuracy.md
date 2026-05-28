@@ -635,18 +635,17 @@ git commit -m "refactor: text_parser 精简为正则兜底
 Create `backend/tests/test_qwen_ocr_client.py`：
 
 ```python
-import base64
-
 from app.ocr import qwen_ocr_client
 
 
-def test_build_payload_embeds_image_and_pixels(monkeypatch):
+def test_build_payload_uses_signed_image_url_and_pixels(monkeypatch):
     monkeypatch.setattr(qwen_ocr_client.settings, "qwen_ocr_model", "qwen-vl-ocr-latest")
-    payload = qwen_ocr_client._build_payload(b"hello")
+    image_url = "https://oss.example.test/ocr/qwen/image.jpg?Signature=test"
+    payload = qwen_ocr_client._build_payload(image_url)
     assert payload["model"] == "qwen-vl-ocr-latest"
     content = payload["messages"][0]["content"]
     image_part = next(p for p in content if p["type"] == "image_url")
-    assert base64.b64encode(b"hello").decode("ascii") in image_part["image_url"]["url"]
+    assert image_part["image_url"]["url"] == image_url
     assert image_part["min_pixels"] == 3072
     assert image_part["max_pixels"] == 8388608
 
@@ -681,11 +680,11 @@ def test_parse_response_bad_structure():
     assert result == {"raw_text": "", "fields": {}}
 
 
-async def test_recognize_drug_mock_when_no_key(monkeypatch):
+async def test_recognize_drug_requires_api_key(monkeypatch):
     monkeypatch.setattr(qwen_ocr_client.settings, "dashscope_api_key", "")
-    result = await qwen_ocr_client.recognize_drug(b"image")
-    assert result["fields"]["name"] == "阿莫西林胶囊"
-    assert "阿莫西林胶囊" in result["raw_text"]
+
+    with pytest.raises(RuntimeError, match="DASHSCOPE_API_KEY"):
+        await qwen_ocr_client.recognize_drug(b"image")
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -702,9 +701,8 @@ Create `backend/app/ocr/qwen_ocr_client.py`：
 通义千问 OCR 客户端 — 阿里云百炼 qwen-vl-ocr-latest
 
 走百炼 OpenAI 兼容接口，一次调用产出图像完整文本 raw_text 与模型抽取的结构化字段。
-未配置 DASHSCOPE_API_KEY 时返回 mock 数据；API/网络异常抛 RuntimeError 交由上层处理。
+未配置 DASHSCOPE_API_KEY 或 API/网络异常时抛 RuntimeError 交由上层处理。
 """
-import base64
 import json
 import logging
 import re
@@ -740,10 +738,8 @@ _OCR_PROMPT = """请识别这张药品包装图片，完成两件事并只输出
 只输出 JSON，不要任何额外说明文字。"""
 
 
-def _build_payload(image_bytes: bytes) -> dict:
-    """构造百炼 chat/completions 请求体，图片以 base64 data URL 内联"""
-    b64 = base64.b64encode(image_bytes).decode("ascii")
-    data_url = f"data:image/jpeg;base64,{b64}"
+def _build_payload(image_url: str) -> dict:
+    """构造百炼 chat/completions 请求体，图片使用 OSS 临时签名 URL"""
     return {
         "model": settings.qwen_ocr_model,
         "messages": [
@@ -752,7 +748,7 @@ def _build_payload(image_bytes: bytes) -> dict:
                 "content": [
                     {
                         "type": "image_url",
-                        "image_url": {"url": data_url},
+                        "image_url": {"url": image_url},
                         "min_pixels": _MIN_PIXELS,
                         "max_pixels": _MAX_PIXELS,
                     },
@@ -792,41 +788,14 @@ def _parse_response(resp_json: dict) -> dict:
     return {"raw_text": str(raw_text), "fields": fields}
 
 
-def _mock_response() -> dict:
-    """开发用 mock 响应，模拟 qwen-vl-ocr 输出"""
-    raw_text = "\n".join([
-        "阿莫西林胶囊",
-        "批准文号：国药准字H20044416",
-        "规格：0.25g×24粒",
-        "生产企业：广州白云山制药股份有限公司",
-        "批号：20240315",
-        "生产日期：2024-03-15",
-        "有效期至：2026-03-01",
-    ])
-    return {
-        "raw_text": raw_text,
-        "fields": {
-            "name": "阿莫西林胶囊",
-            "approval_number": "国药准字H20044416",
-            "manufacturer": "广州白云山制药股份有限公司",
-            "specification": "0.25g×24粒",
-            "batch_number": "20240315",
-            "production_date": "2024-03-15",
-            "expiry_date": "2026-03-01",
-            "quantity": None,
-        },
-    }
-
-
 async def recognize_drug(image_bytes: bytes) -> dict:
     """
     调用 qwen-vl-ocr-latest 识别药盒图片。
     返回 {"raw_text": str, "fields": dict}。
-    未配置 DASHSCOPE_API_KEY → 返回 mock；API/网络异常 → RuntimeError。
+    未配置 DASHSCOPE_API_KEY 或 API/网络异常 → RuntimeError。
     """
     if not settings.dashscope_api_key:
-        logger.warning("[QwenOCR] 未配置 DASHSCOPE_API_KEY，使用 mock 模式")
-        return _mock_response()
+        raise RuntimeError("未配置 DASHSCOPE_API_KEY，无法调用 qwen-vl-ocr 进行真实 OCR 识别")
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:

@@ -4,5 +4,6 @@ from app.models.drug import Drug  # noqa
 from app.models.batch import DrugBatch, BatchStatus  # noqa
 from app.models.inventory import InventoryRecord, OperationType  # noqa
 from app.models.ocr_record import OcrRecord, OcrStatus  # noqa
+from app.models.ocr_record_image import OcrRecordImage  # noqa
 from app.models.alert import Alert, AlertType, AlertSeverity  # noqa
 from app.models.login_log import LoginLog  # noqa

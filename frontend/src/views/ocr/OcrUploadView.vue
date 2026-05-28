@@ -17,23 +17,31 @@
         <!-- 拖拽上传区 -->
         <div
           class="drop-zone"
-          :class="{ 'drop-zone--active': isDragging, 'drop-zone--has-image': previewUrl }"
+          :class="{ 'drop-zone--active': isDragging, 'drop-zone--has-image': previewUrls.length > 0 }"
           @dragover.prevent="isDragging = true"
           @dragleave.prevent="isDragging = false"
           @drop.prevent="handleDrop"
           @click="triggerFilePicker"
         >
-          <template v-if="!previewUrl">
+          <template v-if="previewUrls.length === 0">
             <el-icon class="drop-icon"><UploadFilled /></el-icon>
             <p class="drop-text">拖拽图片至此，或<span class="drop-link">点击选择</span></p>
-            <p class="drop-hint">支持 JPG / PNG / BMP / WebP，最大 10 MB</p>
+            <p class="drop-hint">同一药盒不同面可多选，最多 6 张，单张最大 10 MB</p>
           </template>
 
           <template v-else>
-            <img :src="previewUrl" alt="预览图" class="preview-img" />
+            <div class="preview-grid" :class="{ 'preview-grid--single': previewUrls.length === 1 }">
+              <img
+                v-for="(url, index) in previewUrls"
+                :key="url"
+                :src="url"
+                :alt="`预览图 ${index + 1}`"
+                class="preview-img"
+              />
+            </div>
             <div class="preview-overlay">
               <el-icon class="overlay-icon"><RefreshRight /></el-icon>
-              <span>重新选择</span>
+              <span>{{ selectedFiles.length }} 张，重新选择</span>
             </div>
           </template>
         </div>
@@ -41,6 +49,7 @@
         <input
           ref="fileInput"
           type="file"
+          multiple
           accept="image/jpeg,image/png,image/bmp,image/webp"
           style="display: none"
           @change="handleFileChange"
@@ -50,7 +59,7 @@
         <el-button
           type="primary"
           :loading="ocrStore.uploading"
-          :disabled="!selectedFile || ocrStore.uploading"
+          :disabled="selectedFiles.length === 0 || ocrStore.uploading"
           class="recognize-btn"
           @click="startRecognize"
         >
@@ -89,7 +98,19 @@
             class="mb-16"
           />
 
-          <div v-if="ocrStore.currentRecord.status === 'pending'" class="pending-actions">
+          <el-alert
+            v-if="ocrStore.currentRecord.status === 'paused'"
+            title="识别任务已暂停，可在任务队列中点击继续恢复识别"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="mb-16"
+          />
+
+          <div
+            v-if="ocrStore.currentRecord.status === 'pending' || ocrStore.currentRecord.status === 'paused'"
+            class="pending-actions"
+          >
             <el-button type="primary" plain @click="resetResult">
               返回上传图片
             </el-button>
@@ -103,6 +124,28 @@
             :closable="false"
             class="mb-16"
           />
+
+          <el-alert
+            v-if="requiresManualReview(ocrStore.currentRecord)"
+            :title="manualReviewMessage(ocrStore.currentRecord)"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="mb-16"
+          />
+
+          <div v-if="recordImagePaths(ocrStore.currentRecord).length > 1" class="review-image-strip mb-16">
+            <el-image
+              v-for="(path, index) in recordImagePaths(ocrStore.currentRecord)"
+              :key="`${ocrStore.currentRecord.id}-${path}`"
+              :src="`/uploads/${path}`"
+              :preview-src-list="recordPreviewSrcList(ocrStore.currentRecord)"
+              :initial-index="index"
+              fit="cover"
+              class="review-thumb"
+              preview-teleported
+            />
+          </div>
 
           <!-- 字段完整度 -->
           <div v-if="ocrStore.currentRecord.confidence != null" class="confidence-row">
@@ -127,7 +170,7 @@
 
           <!-- 可编辑确认表单 -->
           <el-form
-            v-if="ocrStore.currentRecord.status !== 'pending'"
+            v-if="ocrStore.currentRecord.status !== 'pending' && ocrStore.currentRecord.status !== 'paused'"
             ref="confirmFormRef"
             :model="confirmForm"
             :rules="confirmRules"
@@ -220,7 +263,7 @@
                 :disabled="ocrStore.currentRecord.status === 'failed'"
                 @click="handleConfirm"
               >
-                确认入库
+                {{ requiresManualReview(ocrStore.currentRecord) ? '人工核对后确认入库' : '确认入库' }}
               </el-button>
             </div>
           </el-form>
@@ -237,7 +280,7 @@
           <el-button
             type="primary"
             size="small"
-            :disabled="taskSelection.length === 0"
+            :disabled="batchConfirmableTaskSelection.length === 0"
             @click="handleBatchConfirm(taskSelection)"
           >
             批量确认
@@ -280,8 +323,8 @@
         <el-table-column label="预览" width="72">
           <template #default="{ row }">
             <el-image
-              :src="`/uploads/${row.image_path}`"
-              :preview-src-list="[`/uploads/${row.image_path}`]"
+              :src="recordFirstImageUrl(row)"
+              :preview-src-list="recordPreviewSrcList(row)"
               fit="cover"
               style="width: 48px; height: 48px; border-radius: 6px; cursor: zoom-in"
               preview-teleported
@@ -311,9 +354,18 @@
             <el-tag :type="statusMap[row.status as OcrStatus].type as any" size="small" round>
               {{ statusMap[row.status as OcrStatus].label }}
             </el-tag>
+            <el-tag
+              v-if="requiresManualReview(row)"
+              type="warning"
+              size="small"
+              round
+              class="manual-review-tag"
+            >
+              需人工审核
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
             <div class="history-actions">
               <el-button
@@ -323,6 +375,24 @@
                 @click="handleOpenQueueRecord(row)"
               >
                 {{ historyActionLabel(row.status as OcrStatus) }}
+              </el-button>
+              <el-button
+                v-if="row.status === 'pending'"
+                type="warning"
+                text
+                size="small"
+                @click="handlePause(row)"
+              >
+                暂停
+              </el-button>
+              <el-button
+                v-if="row.status === 'paused'"
+                type="success"
+                text
+                size="small"
+                @click="handleResume(row)"
+              >
+                继续
               </el-button>
               <el-button
                 type="danger"
@@ -346,7 +416,7 @@
           <el-button
             type="primary"
             size="small"
-            :disabled="historySelection.length === 0"
+            :disabled="batchConfirmableHistorySelection.length === 0"
             @click="handleBatchConfirm(historySelection)"
           >
             批量确认
@@ -391,8 +461,8 @@
         <el-table-column label="预览" width="72">
           <template #default="{ row }">
             <el-image
-              :src="`/uploads/${row.image_path}`"
-              :preview-src-list="[`/uploads/${row.image_path}`]"
+              :src="recordFirstImageUrl(row)"
+              :preview-src-list="recordPreviewSrcList(row)"
               fit="cover"
               style="width: 48px; height: 48px; border-radius: 6px; cursor: zoom-in"
               preview-teleported
@@ -432,6 +502,15 @@
           <template #default="{ row }">
             <el-tag :type="statusMap[row.status as OcrStatus].type as any" size="small" round>
               {{ statusMap[row.status as OcrStatus].label }}
+            </el-tag>
+            <el-tag
+              v-if="requiresManualReview(row)"
+              type="warning"
+              size="small"
+              round
+              class="manual-review-tag"
+            >
+              需人工审核
             </el-tag>
           </template>
         </el-table-column>
@@ -482,7 +561,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, RefreshRight, DocumentChecked } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -490,7 +569,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useOcrStore } from '@/stores/ocr'
 import { useAuthStore } from '@/stores/auth'
 import type { OcrStatus, OcrConfirmRequest, OcrRecord } from '@/types/ocr'
-import { OCR_STATUS_MAP } from '@/types/ocr'
+import { OCR_STATUS_MAP, isBatchConfirmAllowed, isManualReviewRequired } from '@/types/ocr'
 
 const ocrStore = useOcrStore()
 const authStore = useAuthStore()
@@ -498,8 +577,8 @@ const statusMap = OCR_STATUS_MAP
 
 // --- 上传区状态 ---
 const isDragging = ref(false)
-const selectedFile = ref<File | null>(null)
-const previewUrl = ref<string>('')
+const selectedFiles = ref<File[]>([])
+const previewUrls = ref<string[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 
 // --- 确认表单 ---
@@ -528,6 +607,8 @@ const filterStatus = ref<string | undefined>(undefined)
 const currentPage = ref(1)
 const taskSelection = ref<OcrRecord[]>([])
 const historySelection = ref<OcrRecord[]>([])
+const batchConfirmableTaskSelection = computed(() => taskSelection.value.filter(isBatchConfirmAllowed))
+const batchConfirmableHistorySelection = computed(() => historySelection.value.filter(isBatchConfirmAllowed))
 
 // -------- 方法 --------
 
@@ -536,9 +617,9 @@ function triggerFilePicker() {
 }
 
 function handleFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    setFile(file)
+  const files = Array.from((e.target as HTMLInputElement).files || [])
+  if (files.length > 0) {
+    setFiles(files)
     // 清空 input 原生值，使同一文件下次仍可触发 @change
     ;(e.target as HTMLInputElement).value = ''
   }
@@ -546,18 +627,19 @@ function handleFileChange(e: Event) {
 
 function handleDrop(e: DragEvent) {
   isDragging.value = false
-  const file = e.dataTransfer?.files?.[0]
-  if (file) setFile(file)
+  const files = Array.from(e.dataTransfer?.files || [])
+  if (files.length > 0) setFiles(files)
 }
 
-function setFile(file: File) {
-  selectedFile.value = file
-  previewUrl.value = URL.createObjectURL(file)
+function setFiles(files: File[]) {
+  clearSelectedFile()
+  selectedFiles.value = files
+  previewUrls.value = files.map((file) => URL.createObjectURL(file))
 }
 
 async function startRecognize() {
-  if (!selectedFile.value) return
-  const record = await ocrStore.uploadAndRecognize(selectedFile.value)
+  if (selectedFiles.value.length === 0) return
+  const record = await ocrStore.uploadAndRecognize([...selectedFiles.value])
   if (record) {
     // 新记录已写入 DB，立即刷新历史列表使其可见（用户取消时不需再刷新页面）
     loadHistory()
@@ -592,8 +674,11 @@ function watchQueueRecord(recordId: number) {
 }
 
 function clearSelectedFile() {
-  selectedFile.value = null
-  previewUrl.value = ''
+  previewUrls.value
+    .filter((url) => url.startsWith('blob:'))
+    .forEach((url) => URL.revokeObjectURL(url))
+  selectedFiles.value = []
+  previewUrls.value = []
   if (fileInput.value) fileInput.value.value = ''
 }
 
@@ -655,6 +740,34 @@ function isHistoryRowSelectable(row: OcrRecord): boolean {
   return authStore.isAdmin || row.status !== 'confirmed'
 }
 
+function recordImagePaths(record?: OcrRecord | null): string[] {
+  if (!record) return []
+  if (record.image_paths?.length) return record.image_paths
+  if (record.images?.length) {
+    return [...record.images]
+      .sort((a, b) => a.image_index - b.image_index)
+      .map((image) => image.image_path)
+  }
+  return record.image_path ? [record.image_path] : []
+}
+
+function recordPreviewSrcList(record?: OcrRecord | null): string[] {
+  return recordImagePaths(record).map((path) => `/uploads/${path}`)
+}
+
+function recordFirstImageUrl(record: OcrRecord): string {
+  return recordPreviewSrcList(record)[0] || ''
+}
+
+function requiresManualReview(record?: OcrRecord | null): boolean {
+  return !!record && record.status === 'success' && isManualReviewRequired(record)
+}
+
+function manualReviewMessage(record: OcrRecord): string {
+  return record.extracted_data?.multi_image?.consistency?.message
+    || '多张图片缺少可交叉验证字段，AI 仅提供辅助意见，请人工核对所有照片后再确认入库。'
+}
+
 function openRecordForReview(record: OcrRecord) {
   ocrStore.currentRecord = record
   fillConfirmForm(record)
@@ -662,13 +775,13 @@ function openRecordForReview(record: OcrRecord) {
 
 async function handleOpenQueueRecord(row: OcrRecord) {
   ocrStore.markTaskRead(row.id)
-  selectedFile.value = null
-  previewUrl.value = `/uploads/${row.image_path}`
-  if (fileInput.value) fileInput.value.value = ''
+  clearSelectedFile()
+  previewUrls.value = recordPreviewSrcList(row)
 
   const refreshed = await ocrStore.refreshRecord(row.id)
   const record = refreshed || row
   ocrStore.currentRecord = record
+  previewUrls.value = recordPreviewSrcList(record)
 
   if (record.status === 'pending') {
     ElMessage.info('正在查看该识别任务，完成后会自动刷新当前面板')
@@ -688,6 +801,12 @@ async function handleOpenQueueRecord(row: OcrRecord) {
     return
   }
 
+  if (record.status === 'paused') {
+    openRecordForReview(record)
+    ElMessage.info('该识别任务已暂停，可在任务队列中点击继续')
+    return
+  }
+
   if (record.status === 'success') {
     openRecordForReview(record)
     ElMessage.success('已载入待确认记录')
@@ -704,10 +823,34 @@ async function handleOpenHistoryRecord(row: OcrRecord) {
   await handleOpenQueueRecord(row)
 }
 
+async function handlePause(row: OcrRecord) {
+  const record = await ocrStore.pauseRecord(row.id)
+  if (!record) return
+  await refreshTables()
+}
+
+async function handleResume(row: OcrRecord) {
+  const record = await ocrStore.resumeRecord(row.id)
+  if (!record) return
+  await refreshTables()
+  watchQueueRecord(record.id)
+}
+
 async function handleConfirm() {
   if (!ocrStore.currentRecord) return
   await confirmFormRef.value?.validate(async (valid) => {
     if (!valid) return
+    if (requiresManualReview(ocrStore.currentRecord)) {
+      try {
+        await ElMessageBox.confirm(
+          'AI 仅提供辅助意见。请确认已人工核对所有照片与识别字段后再入库。',
+          '人工审核确认',
+          { type: 'warning' },
+        )
+      } catch {
+        return
+      }
+    }
     confirming.value = true
     const ok = await ocrStore.confirmRecord(ocrStore.currentRecord!.id, { ...confirmForm })
     confirming.value = false
@@ -720,22 +863,29 @@ async function handleConfirm() {
 }
 
 async function handleBatchConfirm(rows: OcrRecord[]) {
-  const candidates = rows.filter((row) => row.status === 'success')
+  const candidates = rows.filter(isBatchConfirmAllowed)
   const ready = candidates
     .map((row) => ({ row, payload: buildConfirmPayload(row) }))
     .filter((item): item is { row: OcrRecord; payload: OcrConfirmRequest } => item.payload != null)
 
   const missing = candidates.length - ready.length
   const skipped = rows.length - candidates.length + missing
+  const reviewRequired = rows.filter(requiresManualReview).length
 
   if (ready.length === 0) {
-    ElMessage.warning('没有可批量确认的待确认记录；缺少必填字段的记录请先单独核对')
+    ElMessage.warning(
+      reviewRequired > 0
+        ? '需人工审核的多图记录不能批量确认，请单独核对后入库'
+        : '没有可批量确认的待确认记录；缺少必填字段的记录请先单独核对',
+    )
     return
   }
 
   try {
     await ElMessageBox.confirm(
-      skipped > 0
+      reviewRequired > 0
+        ? `将确认 ${ready.length} 条记录，跳过 ${reviewRequired} 条需人工审核的多图记录。继续？`
+        : skipped > 0
         ? `将确认 ${ready.length} 条记录，跳过 ${skipped} 条不可确认或缺少必填字段的记录。继续？`
         : `确认将选中的 ${ready.length} 条记录批量入库？`,
       '批量确认',
@@ -955,11 +1105,26 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
-.preview-img {
+.preview-grid {
   width: 100%;
   height: 220px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 6px;
+  padding: 6px;
+}
+.preview-grid--single {
+  grid-template-columns: 1fr;
+}
+.preview-img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   object-fit: contain;
   display: block;
+  background: #f9fafb;
+  border-radius: 6px;
 }
 .preview-overlay {
   position: absolute;
@@ -1090,6 +1255,20 @@ onBeforeUnmount(() => {
   border-radius: 4px;
 }
 
+.review-image-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.review-thumb {
+  width: 100%;
+  height: 72px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: zoom-in;
+  background: #f9fafb;
+}
+
 /* 历史记录 */
 .task-queue-section {
   padding: 20px 24px;
@@ -1128,6 +1307,9 @@ onBeforeUnmount(() => {
   border: 2px solid #bfdbfe;
   border-top-color: #3b82f6;
   animation: queue-spin 0.8s linear infinite;
+}
+.manual-review-tag {
+  margin-left: 4px;
 }
 @keyframes queue-spin {
   to {

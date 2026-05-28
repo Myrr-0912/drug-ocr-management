@@ -48,10 +48,27 @@ class Settings(BaseSettings):
     qwen_ocr_model: str = "qwen-vl-ocr-latest"
     qwen_ocr_timeout_seconds: int = 120
     qwen_ocr_max_attempts: int = 2
-    qwen_ocr_max_pixels: int = 4194304
+    qwen_ocr_max_pixels: int = 2097152
+    qwen_ocr_per_record_concurrency: int = 2
+    qwen_ocr_global_concurrency: int = 3
     ocr_preprocess_min_short_edge: int = 800
-    ocr_preprocess_target_short_edge: int = 1200
-    ocr_preprocess_jpeg_quality: int = 85
+    ocr_preprocess_target_short_edge: int = 900
+    ocr_preprocess_jpeg_quality: int = 75
+    max_ocr_images_per_record: int = 6
+
+    # 阿里云 OSS 临时签名 URL：Qwen OCR 图片传输统一使用该链路
+    aliyun_oss_endpoint: str = ""
+    aliyun_oss_bucket: str = ""
+    aliyun_oss_access_key_id: str = ""
+    aliyun_oss_access_key_secret: str = ""
+    aliyun_oss_ocr_prefix: str = "ocr/qwen"
+    aliyun_oss_signed_url_expire_seconds: int = 1800
+
+    # DeepSeek 多图一致性辅助校验（只在无重叠字段时触发）
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-v4-flash"
+    deepseek_timeout_seconds: int = 30
 
     # 文件上传配置
     upload_dir: str = "uploads"

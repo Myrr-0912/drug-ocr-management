@@ -3,7 +3,15 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import type { OcrRecord, OcrConfirmRequest, OcrStatus } from '@/types/ocr'
-import { uploadOcrImage, confirmOcrRecord, getOcrList, getOcrRecord, deleteOcrRecord } from '@/api/ocr'
+import {
+  uploadOcrImage,
+  confirmOcrRecord,
+  pauseOcrRecord,
+  resumeOcrRecord,
+  getOcrList,
+  getOcrRecord,
+  deleteOcrRecord,
+} from '@/api/ocr'
 
 const OCR_POLL_INTERVAL_MS = 2000
 const OCR_POLL_TIMEOUT_MS = 260000
@@ -70,12 +78,21 @@ export const useOcrStore = defineStore('ocr', () => {
     pollingRecordIds.value = pollingRecordIds.value.filter((id) => id !== recordId)
   }
 
-  /** 上传图片并识别 */
-  async function uploadAndRecognize(file: File): Promise<OcrRecord | null> {
+  function applyRecordUpdate(record: OcrRecord, activate = false) {
+    if (activate || currentRecord.value?.id === record.id) {
+      currentRecord.value = record
+    }
+    upsertRecord(record)
+    upsertTaskQueueRecord(record)
+  }
+
+  /** 上传一张或多张同一药盒图片并识别 */
+  async function uploadAndRecognize(fileOrFiles: File | File[]): Promise<OcrRecord | null> {
     uploading.value = true
     try {
+      const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles]
       const formData = new FormData()
-      formData.append('file', file)
+      files.forEach((file) => formData.append('files', file))
       const res = await uploadOcrImage(formData)
       const record = res.data.data!
       upsertRecord(record)
@@ -92,11 +109,7 @@ export const useOcrStore = defineStore('ocr', () => {
     try {
       const res = await getOcrRecord(recordId)
       const record = res.data.data!
-      if (activate && currentRecord.value?.id === record.id) {
-        currentRecord.value = record
-      }
-      upsertRecord(record)
-      upsertTaskQueueRecord(record)
+      applyRecordUpdate(record, activate)
       return record
     } catch {
       return null
@@ -154,6 +167,31 @@ export const useOcrStore = defineStore('ocr', () => {
     }
   }
 
+  async function pauseRecord(recordId: number): Promise<OcrRecord | null> {
+    try {
+      const res = await pauseOcrRecord(recordId)
+      const record = res.data.data!
+      stopPolling(recordId)
+      applyRecordUpdate(record)
+      ElMessage.success('识别任务已暂停')
+      return record
+    } catch {
+      return null
+    }
+  }
+
+  async function resumeRecord(recordId: number): Promise<OcrRecord | null> {
+    try {
+      const res = await resumeOcrRecord(recordId)
+      const record = res.data.data!
+      applyRecordUpdate(record)
+      ElMessage.success('识别任务已恢复')
+      return record
+    } catch {
+      return null
+    }
+  }
+
   /** 加载历史记录列表 */
   async function loadRecords(params?: { status?: string; page?: number; page_size?: number }) {
     loading.value = true
@@ -168,7 +206,7 @@ export const useOcrStore = defineStore('ocr', () => {
   }
 
   async function loadTaskQueue() {
-    const statuses: OcrStatus[] = ['pending', 'success', 'failed']
+    const statuses: OcrStatus[] = ['pending', 'paused', 'success', 'failed']
     const responses = await Promise.all(
       statuses.map((status) => getOcrList({ status, page: 1, page_size: 100 })),
     )
@@ -214,6 +252,8 @@ export const useOcrStore = defineStore('ocr', () => {
     cancelPolling,
     markTaskRead,
     confirmRecord,
+    pauseRecord,
+    resumeRecord,
     loadRecords,
     loadTaskQueue,
     deleteRecord,

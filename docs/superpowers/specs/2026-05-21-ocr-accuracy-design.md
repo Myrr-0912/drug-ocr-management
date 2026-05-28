@@ -87,12 +87,12 @@
 
 - 走阿里云百炼 OpenAI 兼容接口：`https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`。
 - 模型 `settings.qwen_ocr_model`（默认 `qwen-vl-ocr-latest`）。
-- 请求体：单条 user 消息，`content` 含图片项（base64 data URL，附 `min_pixels` / `max_pixels`）与文本项（提示词要求输出含 `raw_text` 及 8 个字段的 JSON）。提示词写在 user 文本里，不用 system 消息（qwen-vl-ocr 对 system 角色支持弱）。
+- 请求体：单条 user 消息，`content` 含图片项（OSS 临时签名 URL，附 `min_pixels` / `max_pixels`）与文本项（提示词要求输出含 `raw_text` 及 8 个字段的 JSON）。提示词写在 user 文本里，不用 system 消息（qwen-vl-ocr 对 system 角色支持弱）。
 - 响应解析：取模型输出，剥离 ` ```json ` 代码块后 `json.loads`。
   - 解析成功且为 dict：`raw_text` 取 `raw_text` 键，`fields` 取其余 8 个字段键。
   - 解析失败：把模型整段输出当作 `raw_text`，`fields` 为空 dict（交由正则兜底）。
-- 复用 `httpx`，不引入新 SDK。
-- 未配置 `DASHSCOPE_API_KEY` 时返回 mock 数据（本地开发）。API 错误抛 `RuntimeError`，由 `ocr_service` 捕获写入失败记录。
+- 复用 `httpx` 调百炼，使用 `oss2` 生成 OSS 临时签名 URL。
+- 未配置 `DASHSCOPE_API_KEY` 或 API 错误时抛 `RuntimeError`，由 `ocr_service` 捕获写入失败记录；系统不返回假识别结果。
 
 ### 5.3 识别流水线 `app/ocr/pipeline.py`（新增）
 
@@ -183,7 +183,7 @@ QWEN_OCR_MODEL=qwen-vl-ocr-latest        # OCR 模型
 
 - 新建 `backend/pytest.ini`（`asyncio_mode = auto`）。
 - `image_preprocess`：验证输出可解码、小图被放大、异常输入回退原图。
-- `qwen_ocr_client`：`_build_payload` / `_parse_response` 为纯函数，单测覆盖 base64 内联、JSON 解析、代码块剥离、解析失败回退；HTTP 调用 mock。
+- `qwen_ocr_client`：`_build_payload` / `_parse_response` 为纯函数，单测覆盖 OSS 临时签名 URL、JSON 解析、代码块剥离、解析失败回退；HTTP 调用 mock。
 - `text_parser`：`parse_drug_info` 对纯文本的正则提取行为补单测，确保精简后无回归。
 - `pipeline`：`_merge`、`confidence` 计算为纯逻辑，单测覆盖模型优先、空缺补正则、日期归一化、非法数量跳过；编排函数用 mock 覆盖。
 - `ocr_service`：mock `recognize_and_extract` + 最小 DB 会话替身，验证记录字段写入。

@@ -23,7 +23,7 @@ def test_preprocess_returns_decodable_jpeg():
 def test_preprocess_upscales_small_image():
     out = preprocess_image(_make_jpeg(400, 300))
     decoded = cv2.imdecode(np.frombuffer(out, np.uint8), cv2.IMREAD_COLOR)
-    assert min(decoded.shape[:2]) >= 1000
+    assert min(decoded.shape[:2]) >= 900
 
 
 def test_preprocess_uses_configured_target_short_edge(monkeypatch):
@@ -34,6 +34,18 @@ def test_preprocess_uses_configured_target_short_edge(monkeypatch):
     decoded = cv2.imdecode(np.frombuffer(out, np.uint8), cv2.IMREAD_COLOR)
 
     assert min(decoded.shape[:2]) >= 900
+
+
+def test_preprocess_downscales_large_image_to_configured_max_pixels(monkeypatch):
+    monkeypatch.setattr(image_preprocess.settings, "qwen_ocr_max_pixels", 900_000)
+    monkeypatch.setattr(image_preprocess.settings, "ocr_preprocess_jpeg_quality", 75)
+
+    out = preprocess_image(_make_jpeg(2400, 1800))
+    decoded = cv2.imdecode(np.frombuffer(out, np.uint8), cv2.IMREAD_COLOR)
+    height, width = decoded.shape[:2]
+
+    assert height * width <= 900_000
+    assert len(out) < len(_make_jpeg(2400, 1800))
 
 
 def test_preprocess_garbage_bytes_returns_original():

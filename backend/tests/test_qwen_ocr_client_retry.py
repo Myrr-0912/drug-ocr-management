@@ -4,6 +4,12 @@ from app.ocr import qwen_ocr_client
 async def test_recognize_drug_retries_transport_disconnect(monkeypatch):
     monkeypatch.setattr(qwen_ocr_client.settings, "dashscope_api_key", "test-key")
     monkeypatch.setattr(qwen_ocr_client.settings, "qwen_ocr_max_attempts", 2)
+    monkeypatch.setattr(
+        qwen_ocr_client,
+        "upload_image_and_sign_url",
+        lambda image_bytes: "https://oss.example.test/ocr/qwen/image.jpg?Signature=test",
+        raising=False,
+    )
 
     class FakeResponse:
         def raise_for_status(self):
@@ -52,6 +58,12 @@ async def test_recognize_drug_retries_transport_disconnect(monkeypatch):
 async def test_recognize_drug_stops_at_configured_attempts(monkeypatch):
     monkeypatch.setattr(qwen_ocr_client.settings, "dashscope_api_key", "test-key")
     monkeypatch.setattr(qwen_ocr_client.settings, "qwen_ocr_max_attempts", 1)
+    monkeypatch.setattr(
+        qwen_ocr_client,
+        "upload_image_and_sign_url",
+        lambda image_bytes: "https://oss.example.test/ocr/qwen/image.jpg?Signature=test",
+        raising=False,
+    )
 
     class FakeAsyncClient:
         attempts = 0

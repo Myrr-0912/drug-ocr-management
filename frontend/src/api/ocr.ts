@@ -17,6 +17,16 @@ export function confirmOcrRecord(recordId: number, data: OcrConfirmRequest) {
   return request.post<ApiResponse<OcrConfirmResponse>>(`/ocr/${recordId}/confirm`, data)
 }
 
+/** 暂停 OCR 识别任务 */
+export function pauseOcrRecord(recordId: number) {
+  return request.post<ApiResponse<OcrRecord>>(`/ocr/${recordId}/pause`)
+}
+
+/** 继续 OCR 识别任务 */
+export function resumeOcrRecord(recordId: number) {
+  return request.post<ApiResponse<OcrRecord>>(`/ocr/${recordId}/resume`)
+}
+
 /** 获取 OCR 记录列表 */
 export function getOcrList(params?: { status?: string; page?: number; page_size?: number }) {
   return request.get<ApiResponse<PageResponse<OcrRecord>>>('/ocr', { params })

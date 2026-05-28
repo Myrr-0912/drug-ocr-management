@@ -1,11 +1,12 @@
 import enum
 from sqlalchemy import String, Text, Float, JSON, Integer, Enum, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 
 
 class OcrStatus(str, enum.Enum):
     pending = "pending"        # 识别中
+    paused = "paused"          # 已暂停
     success = "success"        # 识别成功
     failed = "failed"          # 识别失败
     confirmed = "confirmed"    # 已确认入库
@@ -34,3 +35,9 @@ class OcrRecord(Base, TimestampMixin):
         Integer, ForeignKey("users.id", ondelete="SET NULL")
     )
     error_message: Mapped[str | None] = mapped_column(String(500), comment="错误信息")
+    images: Mapped[list["OcrRecordImage"]] = relationship(
+        "OcrRecordImage",
+        back_populates="record",
+        cascade="all, delete-orphan",
+        order_by="OcrRecordImage.image_index",
+    )
