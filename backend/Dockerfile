@@ -44,11 +44,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # libmagic 预留给 WS3 文件头校验；tzdata 设置时区；gosu 供 entrypoint 降权
-# libglib2.0-0 供 opencv-python-headless 运行时链接
 # 健康检查改用 Python stdlib，省去 curl 依赖 + 减小镜像体积
 RUN sed -i "s|http://deb.debian.org/debian|${APT_MIRROR}|g; s|http://security.debian.org/debian-security|${APT_MIRROR}-security|g" /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=120 update \
-    && apt-get install -y --no-install-recommends libmagic1 tzdata gosu libglib2.0-0 \
+    && apt-get install -y --no-install-recommends libmagic1 tzdata gosu \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && rm -rf /var/lib/apt/lists/*
 

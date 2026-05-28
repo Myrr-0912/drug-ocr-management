@@ -51,9 +51,6 @@ class Settings(BaseSettings):
     qwen_ocr_max_pixels: int = 2097152
     qwen_ocr_per_record_concurrency: int = 2
     qwen_ocr_global_concurrency: int = 3
-    ocr_preprocess_min_short_edge: int = 800
-    ocr_preprocess_target_short_edge: int = 900
-    ocr_preprocess_jpeg_quality: int = 75
     max_ocr_images_per_record: int = 6
 
     # 阿里云 OSS 临时签名 URL：Qwen OCR 图片传输统一使用该链路

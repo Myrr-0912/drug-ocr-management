@@ -9,7 +9,6 @@ import re
 import calendar
 from dataclasses import dataclass
 
-from app.ocr.image_preprocess import preprocess_image
 from app.ocr.qwen_ocr_client import recognize_drug
 from app.ocr.text_parser import _normalize_date_str, parse_drug_info
 from app.schemas.ocr import ExtractedDrugData
@@ -131,9 +130,7 @@ def _completeness(extracted: ExtractedDrugData) -> float:
 
 async def recognize_and_extract(image_bytes: bytes) -> RecognitionResult:
     """识别流水线主入口，供 ocr_service 调用。"""
-    processed = preprocess_image(image_bytes)
-
-    ocr = await recognize_drug(processed)
+    ocr = await recognize_drug(image_bytes)
     raw_text = ocr.get("raw_text", "")
     model_fields = ocr.get("fields", {})
 

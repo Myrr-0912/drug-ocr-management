@@ -14,9 +14,6 @@ def test_ocr_settings_have_defaults(monkeypatch, tmp_path):
     assert s.qwen_ocr_max_pixels == 2097152
     assert s.qwen_ocr_per_record_concurrency == 2
     assert s.qwen_ocr_global_concurrency == 3
-    assert s.ocr_preprocess_min_short_edge == 800
-    assert s.ocr_preprocess_target_short_edge == 900
-    assert s.ocr_preprocess_jpeg_quality == 75
     assert s.max_ocr_images_per_record == 6
     assert s.aliyun_oss_endpoint == ""
     assert s.aliyun_oss_bucket == ""

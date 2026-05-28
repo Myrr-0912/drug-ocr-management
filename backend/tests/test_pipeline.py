@@ -81,8 +81,6 @@ def test_completeness_empty():
 
 
 async def test_recognize_and_extract_merges_model_and_regex(monkeypatch):
-    monkeypatch.setattr(pipeline, "preprocess_image", lambda b: b)
-
     async def fake_ocr(_):
         return {
             "raw_text": "阿莫西林胶囊\n批号：20240315\n有效期至：2026-03-01",
@@ -98,9 +96,21 @@ async def test_recognize_and_extract_merges_model_and_regex(monkeypatch):
     assert result.raw_text.startswith("阿莫西林胶囊")
 
 
-async def test_recognize_and_extract_relies_on_regex_when_no_model_fields(monkeypatch):
-    monkeypatch.setattr(pipeline, "preprocess_image", lambda b: b)
+async def test_recognize_and_extract_sends_original_image_bytes(monkeypatch):
+    captured = {}
 
+    async def fake_ocr(image_bytes):
+        captured["image_bytes"] = image_bytes
+        return {"raw_text": "药品名称：测试药", "fields": {"name": "测试药"}}
+
+    monkeypatch.setattr(pipeline, "recognize_drug", fake_ocr)
+
+    await pipeline.recognize_and_extract(b"original-image")
+
+    assert captured["image_bytes"] == b"original-image"
+
+
+async def test_recognize_and_extract_relies_on_regex_when_no_model_fields(monkeypatch):
     async def fake_ocr(_):
         # 模型未给结构化字段（JSON 解析失败的情形），只有 raw_text
         return {
@@ -118,8 +128,6 @@ async def test_recognize_and_extract_relies_on_regex_when_no_model_fields(monkey
 
 
 async def test_recognize_and_extract_drops_hallucinated_model_approval_number(monkeypatch):
-    monkeypatch.setattr(pipeline, "preprocess_image", lambda b: b)
-
     async def fake_ocr(_):
         return {
             "raw_text": "通用名称：克洛己新干混悬剂\n江苏正大清江制药有限公司",
