@@ -1,15 +1,17 @@
 import pytest
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import AsyncMock
 
-from app.core.exceptions import BusinessError
+from app.core.exceptions import BusinessError, ConflictError
 from app.ocr.multi_image_consistency import LlmConsistencyJudgement
 from app.models.ocr_record import OcrStatus
 from app.models.ocr_record import OcrRecord
 from app.models.ocr_record_image import OcrRecordImage
+from app.models.drug import Drug
+from app.models.batch import DrugBatch
 from app.ocr.pipeline import RecognitionResult
-from app.schemas.ocr import ExtractedDrugData, OcrRecordResponse
+from app.schemas.ocr import ExtractedDrugData, OcrConfirmRequest, OcrRecordResponse
 from app.services import ocr_service
 from app.services.ocr_service import UploadImagePayload
 
@@ -19,6 +21,9 @@ class _FakeResult:
         self.value = value
 
     def scalar_one_or_none(self):
+        return self.value
+
+    def first(self):
         return self.value
 
 
@@ -41,6 +46,24 @@ class _FakeSession:
     async def refresh(self, obj, attribute_names=None):
         self.refreshed.append((obj, tuple(attribute_names or [])))
         pass
+
+
+class _SequenceSession(_FakeSession):
+    def __init__(self, *results):
+        super().__init__()
+        self.results = list(results)
+
+    async def execute(self, stmt):
+        if not self.results:
+            raise AssertionError(f"Unexpected query: {stmt}")
+        return _FakeResult(self.results.pop(0))
+
+
+class _IdAssigningSequenceSession(_SequenceSession):
+    async def refresh(self, obj, attribute_names=None):
+        if getattr(obj, "id", None) is None:
+            obj.id = 99
+        await super().refresh(obj, attribute_names)
 
 
 class _PauseAfterSecondStatusRefreshSession(_FakeSession):
@@ -438,6 +461,113 @@ async def test_resume_record_rejects_non_paused_record():
 
     with pytest.raises(BusinessError, match="暂停"):
         await ocr_service.resume_record(db=_FakeSession(record), record_id=21)
+
+
+async def test_confirm_record_rejects_renamed_drug_with_existing_approval_number():
+    record = OcrRecord(id=31, image_path="ocr/a.jpg", status=OcrStatus.success)
+    existing_drug = Drug(
+        id=7,
+        name="阿莫西林胶囊",
+        approval_number="国药准字H12345678",
+    )
+    db = _SequenceSession(record, existing_drug)
+
+    with pytest.raises(ConflictError, match="批准文号"):
+        await ocr_service.confirm_record(
+            db=db,
+            record_id=31,
+            data=OcrConfirmRequest(
+                drug_name="我手动改的药品名",
+                approval_number="国药准字H12345678",
+                batch_number="B001",
+                production_date=date(2026, 1, 1),
+                expiry_date=date(2027, 1, 1),
+                quantity=1,
+                unit="盒",
+            ),
+            operator_id=1,
+        )
+
+
+async def test_confirm_record_rejects_same_batch_number_with_different_drug_name():
+    record = OcrRecord(id=32, image_path="ocr/a.jpg", status=OcrStatus.success)
+    existing_batch = DrugBatch(
+        id=9,
+        drug_id=7,
+        batch_number="B001",
+        production_date=date(2026, 1, 1),
+        expiry_date=date(2027, 1, 1),
+        quantity=1,
+        unit="盒",
+    )
+    db = _SequenceSession(record, None, (existing_batch, "阿莫西林胶囊"))
+
+    with pytest.raises(ConflictError, match="同一照片/同一批号"):
+        await ocr_service.confirm_record(
+            db=db,
+            record_id=32,
+            data=OcrConfirmRequest(
+                drug_name="我手动改的药品名",
+                approval_number=None,
+                batch_number="B001",
+                production_date=date(2026, 1, 1),
+                expiry_date=date(2027, 1, 1),
+                quantity=1,
+                unit="盒",
+            ),
+            operator_id=1,
+        )
+
+
+async def test_confirm_record_syncs_edited_fields_to_ocr_extracted_data():
+    record = OcrRecord(
+        id=32,
+        image_path="ocr/a.jpg",
+        status=OcrStatus.success,
+        extracted_data={
+            "name": "OCR识别药品",
+            "batch_number": "OLD-BATCH",
+            "expiry_date": "2026-01-01",
+            "multi_image": {
+                "consistency": {
+                    "status": "passed",
+                    "review_required": False,
+                },
+            },
+        },
+    )
+    drug = Drug(id=8, name="人工确认药品", approval_number="国药准字H12345678")
+    db = _IdAssigningSequenceSession(record, drug)
+
+    await ocr_service.confirm_record(
+        db=db,
+        record_id=32,
+        data=OcrConfirmRequest(
+            drug_id=8,
+            drug_name="人工确认药品",
+            approval_number="国药准字H12345678",
+            manufacturer="人工厂家",
+            specification="10ml",
+            batch_number="NEW-BATCH",
+            production_date=date(2026, 1, 2),
+            expiry_date=date(2027, 1, 2),
+            quantity=3,
+            unit="盒",
+        ),
+        operator_id=1,
+    )
+
+    assert record.status == OcrStatus.confirmed
+    assert record.extracted_data["name"] == "人工确认药品"
+    assert record.extracted_data["approval_number"] == "国药准字H12345678"
+    assert record.extracted_data["manufacturer"] == "人工厂家"
+    assert record.extracted_data["specification"] == "10ml"
+    assert record.extracted_data["batch_number"] == "NEW-BATCH"
+    assert record.extracted_data["production_date"] == "2026-01-02"
+    assert record.extracted_data["expiry_date"] == "2027-01-02"
+    assert record.extracted_data["quantity"] == 3
+    assert record.extracted_data["unit"] == "盒"
+    assert record.extracted_data["multi_image"]["consistency"]["status"] == "passed"
 
 
 async def test_recognize_record_images_aborts_when_record_pauses_before_write(monkeypatch):

@@ -6,6 +6,7 @@ import type { InternalAxiosRequestConfig } from 'axios'
 // 扩展请求配置类型，支持重试标记
 interface RetryConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
+  suppressErrorMessage?: boolean
 }
 
 const request = axios.create({
@@ -40,7 +41,10 @@ request.interceptors.response.use(
   (response) => {
     const data: ApiResponse = response.data
     if (data.code !== 200) {
-      ElMessage.error(data.message || '操作失败')
+      const config = response.config as RetryConfig
+      if (!config.suppressErrorMessage) {
+        ElMessage.error(data.message || '操作失败')
+      }
       return Promise.reject(new Error(data.message))
     }
     return response
@@ -48,7 +52,8 @@ request.interceptors.response.use(
   async (error) => {
     const config = error.config as RetryConfig
     const status = error.response?.status
-    const message = error.response?.data?.detail || error.message
+    const responseData = error.response?.data
+    const message = responseData?.detail || responseData?.message || error.message
 
     // 401 处理：先尝试用 refresh_token 续期，失败再跳登录
     if (status === 401 && !config._retry) {
@@ -88,6 +93,10 @@ request.interceptors.response.use(
       // refresh 也失败，清空队列并跳转登录
       refreshSubscribers = []
       window.location.href = '/login'
+      return Promise.reject(error)
+    }
+
+    if (config.suppressErrorMessage) {
       return Promise.reject(error)
     }
 

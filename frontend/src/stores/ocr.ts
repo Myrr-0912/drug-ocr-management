@@ -150,9 +150,15 @@ export const useOcrStore = defineStore('ocr', () => {
     recordId: number,
     data: OcrConfirmRequest,
     notify = true,
+    options: {
+      suppressErrorMessage?: boolean
+      onError?: (message: string) => void
+    } = {},
   ): Promise<boolean> {
     try {
-      const res = await confirmOcrRecord(recordId, data)
+      const res = await confirmOcrRecord(recordId, data, {
+        suppressErrorMessage: options.suppressErrorMessage,
+      })
       if (notify) {
         ElMessage.success(res.data.data?.message || '识别结果已确认入库')
       }
@@ -162,9 +168,22 @@ export const useOcrStore = defineStore('ocr', () => {
         currentRecord.value = null
       }
       return true
-    } catch {
+    } catch (error) {
+      const message = getRequestErrorMessage(error)
+      if (options.suppressErrorMessage && notify) {
+        ElMessage.error(message)
+      }
+      options.onError?.(message)
       return false
     }
+  }
+
+  function getRequestErrorMessage(error: unknown): string {
+    const err = error as {
+      response?: { data?: { detail?: string; message?: string } }
+      message?: string
+    }
+    return err.response?.data?.detail || err.response?.data?.message || err.message || '操作失败'
   }
 
   async function pauseRecord(recordId: number): Promise<OcrRecord | null> {

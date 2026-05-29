@@ -1,4 +1,5 @@
 import request from './index'
+import type { AxiosRequestConfig } from 'axios'
 import type { ApiResponse, PageResponse } from '@/types/common'
 import type { OcrRecord, OcrConfirmRequest, OcrConfirmResponse } from '@/types/ocr'
 
@@ -13,8 +14,12 @@ export function uploadOcrImage(formData: FormData) {
 }
 
 /** 确认识别结果并入库 */
-export function confirmOcrRecord(recordId: number, data: OcrConfirmRequest) {
-  return request.post<ApiResponse<OcrConfirmResponse>>(`/ocr/${recordId}/confirm`, data)
+export function confirmOcrRecord(
+  recordId: number,
+  data: OcrConfirmRequest,
+  config?: AxiosRequestConfig & { suppressErrorMessage?: boolean },
+) {
+  return request.post<ApiResponse<OcrConfirmResponse>>(`/ocr/${recordId}/confirm`, data, config)
 }
 
 /** 暂停 OCR 识别任务 */

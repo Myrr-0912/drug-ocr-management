@@ -896,8 +896,12 @@ async function handleBatchConfirm(rows: OcrRecord[]) {
   }
 
   let success = 0
+  const failedMessages: string[] = []
   for (const item of ready) {
-    if (await ocrStore.confirmRecord(item.row.id, item.payload, false)) {
+    if (await ocrStore.confirmRecord(item.row.id, item.payload, false, {
+      suppressErrorMessage: true,
+      onError: (message) => failedMessages.push(message),
+    })) {
       success++
     }
   }
@@ -909,7 +913,8 @@ async function handleBatchConfirm(rows: OcrRecord[]) {
   if (success === ready.length) {
     ElMessage.success(`已批量确认 ${success} 条记录`)
   } else {
-    ElMessage.warning(`已确认 ${success} 条，${ready.length - success} 条失败，请单独处理`)
+    const firstReason = failedMessages[0] ? `。首条失败原因：${failedMessages[0]}` : ''
+    ElMessage.warning(`已确认 ${success} 条，${ready.length - success} 条失败${firstReason}`)
   }
 }
 

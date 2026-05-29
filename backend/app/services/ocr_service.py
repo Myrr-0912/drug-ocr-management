@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.core.exceptions import NotFoundError, BusinessError
+from app.core.exceptions import NotFoundError, BusinessError, ConflictError
 from app.database import AsyncSessionLocal
 from app.models.ocr_record import OcrRecord, OcrStatus
 from app.models.ocr_record_image import OcrRecordImage
@@ -400,6 +400,52 @@ def _is_empty(value) -> bool:
     return False
 
 
+def _sync_confirmed_extracted_data(record: OcrRecord, data: OcrConfirmRequest) -> None:
+    extracted_data = dict(record.extracted_data or {})
+    extracted_data.update(
+        {
+            "name": data.drug_name,
+            "approval_number": data.approval_number,
+            "manufacturer": data.manufacturer,
+            "specification": data.specification,
+            "batch_number": data.batch_number,
+            "production_date": data.production_date.isoformat() if data.production_date else None,
+            "expiry_date": data.expiry_date.isoformat(),
+            "quantity": data.quantity,
+            "unit": data.unit,
+        }
+    )
+    record.extracted_data = extracted_data
+
+
+def _normalize_identity_text(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def _approval_number_conflict_message(
+    approval_number: str,
+    existing_name: str,
+    requested_name: str,
+) -> str:
+    return (
+        f"批准文号 '{approval_number}' 已属于药品 '{existing_name}'，"
+        f"不能作为新药品 '{requested_name}' 入库。请恢复药品名称，"
+        "或清空/更正批准文号后再确认。"
+    )
+
+
+def _batch_name_conflict_message(
+    batch_number: str,
+    existing_name: str,
+    requested_name: str,
+) -> str:
+    return (
+        f"批号 '{batch_number}' 已存在，对应药品为 '{existing_name}'，"
+        f"当前确认的药品名称为 '{requested_name}'。"
+        "同一照片/同一批号不能改成不同药品入库，请核对药品名称或批号后再确认。"
+    )
+
+
 def _format_exception_for_user(error: Exception) -> str:
     message = str(error).strip()
     error_type = type(error).__name__
@@ -537,12 +583,50 @@ async def confirm_record(
         if not drug:
             raise NotFoundError(f"药品 ID {data.drug_id} 不存在")
     else:
-        # 按名称+批准文号查找是否已存在（避免重复创建）
-        drug_q = select(Drug).where(Drug.name == data.drug_name)
+        drug = None
         if data.approval_number:
-            drug_q = drug_q.where(Drug.approval_number == data.approval_number)
-        drug_result = await db.execute(drug_q)
-        drug = drug_result.scalar_one_or_none()
+            existing_by_approval = await db.execute(
+                select(Drug).where(Drug.approval_number == data.approval_number)
+            )
+            drug = existing_by_approval.scalar_one_or_none()
+            if drug and _normalize_identity_text(drug.name) != _normalize_identity_text(data.drug_name):
+                raise ConflictError(
+                    _approval_number_conflict_message(
+                        data.approval_number,
+                        drug.name,
+                        data.drug_name,
+                    )
+                )
+
+        # 按名称+批准文号查找是否已存在（避免重复创建）
+        if not drug:
+            drug_q = select(Drug).where(Drug.name == data.drug_name)
+            if data.approval_number:
+                drug_q = drug_q.where(Drug.approval_number == data.approval_number)
+            drug_result = await db.execute(drug_q)
+            drug = drug_result.scalar_one_or_none()
+
+        existing_batch_result = await db.execute(
+            select(DrugBatch, Drug.name)
+            .join(Drug, Drug.id == DrugBatch.drug_id)
+            .where(DrugBatch.batch_number == data.batch_number)
+            .order_by(DrugBatch.id.desc())
+        )
+        existing_batch_row = existing_batch_result.first()
+        if existing_batch_row:
+            existing_batch, existing_drug_name = existing_batch_row
+            if _normalize_identity_text(existing_drug_name) != _normalize_identity_text(data.drug_name):
+                raise ConflictError(
+                    _batch_name_conflict_message(
+                        data.batch_number,
+                        existing_drug_name,
+                        data.drug_name,
+                    )
+                )
+            if drug and existing_batch.drug_id == drug.id:
+                raise ConflictError(
+                    f"药品 '{existing_drug_name}' 的批号 '{data.batch_number}' 已入库，请勿重复确认同一批次。"
+                )
 
         if not drug:
             drug = Drug(
@@ -597,6 +681,7 @@ async def confirm_record(
     record.status = OcrStatus.confirmed
     record.drug_id = drug.id
     record.batch_id = batch.id
+    _sync_confirmed_extracted_data(record, data)
 
     await db.flush()
 
