@@ -519,6 +519,20 @@ async def test_confirm_record_rejects_same_batch_number_with_different_drug_name
         )
 
 
+def test_ocr_confirm_request_normalizes_blank_approval_number_to_none():
+    data = OcrConfirmRequest(
+        drug_name="小儿氨酚黄那敏颗粒",
+        approval_number="",
+        batch_number="02230841",
+        production_date=date(2023, 8, 25),
+        expiry_date=date(2026, 7, 1),
+        quantity=15,
+        unit="盒",
+    )
+
+    assert data.approval_number is None
+
+
 async def test_confirm_record_syncs_edited_fields_to_ocr_extracted_data():
     record = OcrRecord(
         id=32,

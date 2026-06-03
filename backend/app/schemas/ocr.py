@@ -81,6 +81,14 @@ class OcrConfirmRequest(BaseModel):
     quantity: int = 0
     unit: str = "盒"
 
+    @field_validator("approval_number", mode="before")
+    @classmethod
+    def blank_approval_number_to_none(cls, v: Any) -> str | None:
+        if isinstance(v, str):
+            value = v.strip()
+            return value or None
+        return v
+
     @field_validator("drug_name")
     @classmethod
     def name_not_empty(cls, v: str) -> str:
